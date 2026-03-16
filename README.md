@@ -14,7 +14,7 @@ The AI agent autonomously decides which tools to use, fetches real-time and hist
 ## Architecture
 
 - **Frontend**: Single-page web app (S3 + CloudFront)
-- **Backend**: API Gateway → Lambda → Bedrock Agent (Claude 3.5 Sonnet)
+- **Backend**: API Gateway → Lambda → Bedrock Agent 
 - **Data Pipeline**: Kinesis Data Streams for real-time events, EventBridge for scheduled document ingestion
 - **Storage**: DynamoDB (recent data), S3 (historical archive), Bedrock Knowledge Base (RAG for narrative documents)
 - **Alerts**: EventBridge proactive monitoring for M5.0+ events → SNS notifications
@@ -37,5 +37,3 @@ All free, no API keys required:
 - Proactive alerts for significant events
 
 ---
-
-For detailed architecture and implementation notes, see `notes/Project Description.md`
