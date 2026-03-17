@@ -47,6 +47,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "seismic_archive" {
     id     = "transition-to-glacier"
     status = "Enabled"
 
+    filter {}
+
     transition {
       days          = 90
       storage_class = "GLACIER"
