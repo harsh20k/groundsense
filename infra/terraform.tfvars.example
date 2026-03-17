@@ -1,0 +1,12 @@
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Project Configuration
+project_name = "groundsense"
+environment  = "dev"
+
+# DynamoDB Configuration
+dynamodb_ttl_days = 30
+
+# Alert Configuration
+alert_email = "vn328490@dal.ca"
