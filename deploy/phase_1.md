@@ -32,7 +32,10 @@ aws sts get-caller-identity
 
 ### Required IAM Permissions
 
-Permissions are managed via the `iam` Terraform module (`infra/modules/iam/`). It creates a custom managed policy (`groundsense-<env>-projectowner-policy`) and attaches it to the IAM user **`groundsense-projectowner`**.
+Permissions are managed via the `iam` Terraform module (`infra/modules/iam/`). The module automatically:
+1. **Creates** the IAM user `groundsense-projectowner` (if it doesn't already exist)
+2. **Creates** a custom managed policy (`groundsense-<env>-projectowner-policy`)
+3. **Attaches** the policy to the user
 
 The policy grants scoped access (limited to `groundsense-<env>-*` resources) for:
 - Lambda (create, update, delete functions; add permissions)
@@ -45,14 +48,7 @@ The policy grants scoped access (limited to `groundsense-<env>-*` resources) for
 - IAM (create roles and policies for Lambda execution)
 - CloudWatch Logs (create log groups, set retention)
 
-**Prerequisites**: The IAM user `groundsense-projectowner` must already exist before running `terraform apply`. The module attaches permissions to the existing user — it does not create the user.
-
-To create the user if it doesn't exist yet:
-```bash
-aws iam create-user --user-name groundsense-projectowner
-```
-
-Then configure your AWS CLI with that user's credentials before deploying.
+**Note**: After Terraform creates the user, you'll need to generate access keys separately (see step 6 below) if you want to use this user for AWS CLI access.
 
 ## Deployment Steps
 
@@ -134,7 +130,23 @@ Type `yes` when prompted to confirm.
 
 Deployment takes approximately 2-3 minutes.
 
-### 6. Confirm SNS Email Subscription
+### 6. (Optional) Create Access Keys for Project Owner User
+
+If you want to use the `groundsense-projectowner` user for AWS CLI access, create access keys:
+
+```bash
+aws iam create-access-key --user-name groundsense-projectowner
+```
+
+Save the `AccessKeyId` and `SecretAccessKey` from the output. You can configure a named AWS CLI profile:
+
+```bash
+aws configure --profile groundsense-projectowner
+```
+
+Enter the access key credentials when prompted.
+
+### 7. Confirm SNS Email Subscription
 
 After deployment completes:
 
@@ -144,7 +156,7 @@ After deployment completes:
 
 **Important**: Alerts won't be delivered until you confirm the subscription.
 
-### 7. Verify Deployment
+### 8. Verify Deployment
 
 #### Check Terraform Outputs
 
