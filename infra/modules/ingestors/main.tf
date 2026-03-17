@@ -231,7 +231,7 @@ resource "aws_scheduler_schedule" "seismic_poller" {
     mode = "OFF"
   }
 
-  schedule_expression = "rate(1 minute)"
+  schedule_expression = "rate(5 minute)"
 
   target {
     arn      = aws_lambda_function.seismic_poller.arn
