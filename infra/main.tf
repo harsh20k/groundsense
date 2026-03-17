@@ -37,6 +37,15 @@ module "ingestors" {
   dynamodb_ttl_days            = var.dynamodb_ttl_days
 }
 
+# IAM permissions module
+module "iam" {
+  source = "./modules/iam"
+
+  project_name  = var.project_name
+  environment   = var.environment
+  aws_region    = var.aws_region
+}
+
 # Analytics module
 module "analytics" {
   source = "./modules/analytics"
