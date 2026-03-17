@@ -221,6 +221,16 @@ data "aws_iam_policy_document" "project_owner" {
   }
 }
 
+resource "aws_iam_user" "project_owner" {
+  name = var.iam_user_name
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+}
+
 resource "aws_iam_policy" "project_owner" {
   name        = "${local.name_prefix}-projectowner-policy"
   description = "Scoped permissions for the ${var.project_name} project owner to manage ${var.environment} infrastructure"
@@ -234,6 +244,6 @@ resource "aws_iam_policy" "project_owner" {
 }
 
 resource "aws_iam_user_policy_attachment" "project_owner" {
-  user       = var.iam_user_name
+  user       = aws_iam_user.project_owner.name
   policy_arn = aws_iam_policy.project_owner.arn
 }
