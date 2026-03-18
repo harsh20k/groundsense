@@ -1,3 +1,31 @@
+"""
+Seismic Data Poller Lambda
+
+This Lambda function polls earthquake data from USGS and NRCan APIs and stores
+events in DynamoDB (hot storage, 30-day TTL) and S3 (cold archive, lifecycle tiers).
+
+Data Sources:
+- USGS: Global earthquake monitoring (real-time GeoJSON feed)
+- NRCan: Canadian earthquake monitoring (FDSN text format)
+
+Polling Strategy:
+- EventBridge triggers this Lambda every 5 minutes (configurable)
+- USGS: Uses pre-computed real-time feed (last hour, updates every 1 min)
+- NRCan: Uses FDSN API with custom time range (currently 1 hour)
+
+Time Window Optimization:
+- Current: Conservative 1-hour windows (catches everything, some duplication)
+- Optimal: Dynamic window = polling_interval + 2min buffer
+  * 5-min polling -> 7-min window
+  * 1-min polling -> 3-min window
+- DynamoDB prevents duplicates via conditional writes
+
+Alert Mechanism:
+- Events with magnitude >= 5.0 trigger alerts
+- Written to S3 alerts/ prefix for downstream Lambda processing
+- Target latency: ~2 minutes from earthquake to alert (1-min polling)
+"""
+
 import json
 import os
 from datetime import datetime, timedelta
@@ -17,13 +45,22 @@ table = dynamodb.Table(DYNAMODB_TABLE_NAME)
 
 
 def fetch_nrcan_data():
-    """Fetch recent earthquake data from NRCan FDSN API."""
+    """Fetch recent earthquake data from NRCan FDSN API.
+    
+    Time Window Strategy:
+    - NRCan uses FDSN text format (pipe-delimited), which supports custom time ranges
+    - Current: 1-hour window (conservative, catches all events with redundancy)
+    - Optimal for 5-min polling: 7 minutes (5 min interval + 2 min buffer)
+    - Optimal for 1-min polling: 3 minutes (1 min interval + 2 min buffer)
+    - Buffer accounts for: clock skew, API delays, event processing time
+    - DynamoDB conditional writes prevent duplicates across overlapping windows
+    """
     end_time = datetime.utcnow()
-    start_time = end_time - timedelta(hours=1)
+    start_time = end_time - timedelta(hours=1)  # TODO: Optimize to match polling frequency
     
     url = (
-        f"https://earthquakescanada.nrcan.gc.ca/fdsnws/event/1/query?"
-        f"format=geojson&"
+        f"https://www.earthquakescanada.nrcan.gc.ca/fdsnws/event/1/query?"
+        f"format=text&"
         f"starttime={start_time.isoformat()}&"
         f"endtime={end_time.isoformat()}&"
         f"minmagnitude=0.0"
@@ -31,16 +68,73 @@ def fetch_nrcan_data():
     
     try:
         with urllib.request.urlopen(url, timeout=30) as response:
-            data = json.loads(response.read().decode())
-            print(f"Fetched {len(data.get('features', []))} events from NRCan")
-            return data.get('features', [])
+            text_data = response.read().decode('utf-8')
+            lines = text_data.strip().split('\n')
+            
+            # Skip header line that starts with #
+            events = []
+            for line in lines:
+                if line.startswith('#') or not line.strip():
+                    continue
+                
+                # Parse pipe-delimited format: EventID|Time|Lat|Lon|Depth|MagType|Mag|Location
+                parts = line.split('|')
+                if len(parts) < 8:
+                    continue
+                
+                try:
+                    event_id = parts[0].strip()
+                    time_str = parts[1].strip()
+                    latitude = float(parts[2].strip())
+                    longitude = float(parts[3].strip())
+                    depth = float(parts[4].strip())
+                    mag_type = parts[5].strip()
+                    magnitude = float(parts[6].strip())
+                    place = parts[7].strip()
+                    
+                    # Convert to milliseconds timestamp
+                    time_obj = datetime.fromisoformat(time_str.replace('Z', '+00:00'))
+                    time_ms = int(time_obj.timestamp() * 1000)
+                    
+                    # Convert to GeoJSON-like structure that process_event() expects
+                    feature = {
+                        'id': f"nrcan_{event_id}",
+                        'type': 'Feature',
+                        'properties': {
+                            'mag': magnitude,
+                            'place': place,
+                            'time': time_ms,
+                            'type': 'earthquake',
+                            'magType': mag_type,
+                            'url': f"https://www.earthquakescanada.nrcan.gc.ca/stndon/NEDB-BNDS/bulletin-en.php?evid={event_id}"
+                        },
+                        'geometry': {
+                            'type': 'Point',
+                            'coordinates': [longitude, latitude, depth]
+                        }
+                    }
+                    events.append(feature)
+                except (ValueError, IndexError) as e:
+                    print(f"Error parsing NRCan line: {line} - {e}")
+                    continue
+            
+            print(f"Fetched {len(events)} events from NRCan")
+            return events
     except urllib.error.URLError as e:
         print(f"Error fetching NRCan data: {e}")
         return []
 
 
 def fetch_usgs_data():
-    """Fetch recent earthquake data from USGS real-time feed."""
+    """Fetch recent earthquake data from USGS real-time feed.
+    
+    Time Window Strategy:
+    - Uses USGS pre-computed real-time feed (all_hour.geojson)
+    - Feed updates every 1 minute and contains last 1 hour of events
+    - No custom time filtering needed - already optimized by USGS
+    - Fast response (~100-300ms) - designed for real-time monitoring
+    - Alternative: USGS FDSN endpoint supports custom ranges but slower (2-5s)
+    """
     url = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
     
     try:
@@ -146,7 +240,25 @@ def process_event(feature, source):
 
 
 def lambda_handler(event, context):
-    """Lambda handler for seismic data polling."""
+    """Lambda handler for seismic data polling.
+    
+    Polling Frequency Configuration:
+    - Current: Every 5 minutes (configured in EventBridge schedule)
+    - Recommended for alerts: Every 1 minute (matches USGS feed update rate)
+    - Faster polling (<1 min) provides no benefit due to seismic processing delays
+    
+    Alert Latency Timeline (1-min polling):
+    - T+0:00: Earthquake occurs
+    - T+0:30: Detected by seismometers
+    - T+1:00: Appears in USGS feed
+    - T+1:30: Lambda polls and processes
+    - T+2:00: Alert sent (if M5.0+)
+    
+    Duplicate Prevention:
+    - DynamoDB conditional writes (attribute_not_exists) prevent duplicates
+    - Safe to use overlapping time windows across polling cycles
+    - Each event processed exactly once, regardless of window overlap
+    """
     print("Starting seismic data poll...")
     
     # Fetch data from both sources
