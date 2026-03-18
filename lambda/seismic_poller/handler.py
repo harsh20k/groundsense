@@ -212,14 +212,32 @@ def process_event(feature, source):
             print(f"Event {event_id} already exists in DynamoDB, skipping")
             return
         
-        # Write to S3
+        # Write to S3 (flattened for Athena/Glue compatibility)
         now = datetime.utcnow()
         s3_key_data = f"data/{now.year}/{now.month:02d}/{now.day:02d}/{event_id}.json"
+        
+        # Flatten GeoJSON structure for proper Glue/Athena schema detection
+        flattened_record = {
+            'earthquake_id': event_id,
+            'magnitude': magnitude,
+            'place': place,
+            'time': event_time,
+            'time_ms': time_ms,
+            'longitude': longitude,
+            'latitude': latitude,
+            'depth_km': depth_km,
+            'source': source,
+            'url': properties.get('url', ''),
+            'event_type': properties.get('type', ''),
+            'mag_type': properties.get('magType', ''),
+            'geometry_type': geometry.get('type', ''),
+            'created_at': datetime.utcnow().isoformat()
+        }
         
         s3.put_object(
             Bucket=S3_BUCKET_NAME,
             Key=s3_key_data,
-            Body=json.dumps(feature, default=str),
+            Body=json.dumps(flattened_record, default=str),
             ContentType='application/json'
         )
         print(f"Stored event {event_id} in S3 at {s3_key_data}")
@@ -230,7 +248,7 @@ def process_event(feature, source):
             s3.put_object(
                 Bucket=S3_BUCKET_NAME,
                 Key=s3_key_alert,
-                Body=json.dumps(feature, default=str),
+                Body=json.dumps(flattened_record, default=str),
                 ContentType='application/json'
             )
             print(f"Stored M{magnitude} alert at {s3_key_alert}")
