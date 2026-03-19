@@ -1,0 +1,8 @@
+# AWS Configuration
+aws_region   = "us-east-1"
+project_name = "groundsense"
+environment  = "dev"
+
+# Phase 1 Resources (get these from: cd ../infra && terraform output)
+documents_bucket_name = "groundsense-dev-documents"
+documents_bucket_arn  = "arn:aws:s3:::groundsense-dev-documents"
