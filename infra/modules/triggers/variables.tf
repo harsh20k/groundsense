@@ -23,3 +23,15 @@ variable "alert_email" {
   type        = string
   default     = ""
 }
+
+variable "knowledge_base_id" {
+  description = "Bedrock Knowledge Base ID (from Phase 2)"
+  type        = string
+  default     = ""
+}
+
+variable "data_source_id" {
+  description = "Bedrock Data Source ID (from Phase 2)"
+  type        = string
+  default     = ""
+}

@@ -7,6 +7,8 @@ module "triggers" {
   seismic_archive_bucket_arn = "arn:aws:s3:::${var.project_name}-${var.environment}-seismic-archive"
   documents_bucket_arn      = "arn:aws:s3:::${var.project_name}-${var.environment}-documents"
   alert_email               = var.alert_email
+  knowledge_base_id         = var.knowledge_base_id
+  data_source_id            = var.data_source_id
 }
 
 # Storage module

@@ -164,6 +164,15 @@ resource "aws_iam_role_policy" "kb_sync" {
           "s3:GetObject"
         ]
         Resource = "${var.documents_bucket_arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "bedrock:StartIngestionJob",
+          "bedrock:GetIngestionJob",
+          "bedrock:ListIngestionJobs"
+        ]
+        Resource = "arn:aws:bedrock:*:*:knowledge-base/*"
       }
     ]
   })
@@ -184,6 +193,13 @@ resource "aws_lambda_function" "kb_sync" {
   source_code_hash = data.archive_file.kb_sync.output_base64sha256
   runtime          = "python3.11"
   timeout          = 30
+
+  environment {
+    variables = {
+      KNOWLEDGE_BASE_ID = var.knowledge_base_id
+      DATA_SOURCE_ID    = var.data_source_id
+    }
+  }
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-kb-sync"

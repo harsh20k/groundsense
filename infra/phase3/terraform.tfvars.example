@@ -1,0 +1,15 @@
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Project Configuration
+project_name = "groundsense"
+environment  = "dev"
+
+# Phase 1 outputs (get these from: cd ../infra && terraform output)
+dynamodb_table_name       = "your-dynamodb-table-name"
+athena_workgroup_name     = "your-athena-workgroup-name"
+glue_database_name        = "your-glue-database-name"
+s3_athena_output_bucket   = "your-s3-bucket-name"
+
+# Phase 2 outputs (get these from: cd ../phase2 && terraform output)
+knowledge_base_id         = "your-knowledge-base-id"

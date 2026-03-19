@@ -135,7 +135,8 @@ resource "aws_iam_role_policy" "document_fetcher" {
       {
         Effect = "Allow"
         Action = [
-          "s3:PutObject"
+          "s3:PutObject",
+          "s3:HeadObject"
         ]
         Resource = "${var.documents_bucket_arn}/*"
       }
