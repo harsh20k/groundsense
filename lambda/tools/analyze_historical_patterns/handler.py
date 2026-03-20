@@ -63,9 +63,8 @@ def generate_sql_query(query_type, time_range_days, min_magnitude, region):
     if query_type == 'count':
         sql = f"""
         SELECT COUNT(*) as earthquake_count
-        FROM earthquakes
-        WHERE year >= '{start_date.year}'
-          AND TRY_CAST(magnitude AS DOUBLE) >= {min_magnitude}
+        FROM data
+        WHERE TRY_CAST(magnitude AS DOUBLE) >= {min_magnitude}
           AND TRY(date_parse(time, '%Y-%m-%dT%H:%i:%s')) >= date_parse('{start_date_str}', '%Y-%m-%d')
           AND TRY(date_parse(time, '%Y-%m-%dT%H:%i:%s')) <= date_parse('{end_date_str}', '%Y-%m-%d')
           {region_filter}
@@ -78,9 +77,8 @@ def generate_sql_query(query_type, time_range_days, min_magnitude, region):
             MIN(TRY_CAST(magnitude AS DOUBLE)) as min_magnitude,
             MAX(TRY_CAST(magnitude AS DOUBLE)) as max_magnitude,
             COUNT(*) as event_count
-        FROM earthquakes
-        WHERE year >= '{start_date.year}'
-          AND TRY_CAST(magnitude AS DOUBLE) >= {min_magnitude}
+        FROM data
+        WHERE TRY_CAST(magnitude AS DOUBLE) >= {min_magnitude}
           AND TRY(date_parse(time, '%Y-%m-%dT%H:%i:%s')) >= date_parse('{start_date_str}', '%Y-%m-%d')
           AND TRY(date_parse(time, '%Y-%m-%dT%H:%i:%s')) <= date_parse('{end_date_str}', '%Y-%m-%d')
           {region_filter}
@@ -97,9 +95,8 @@ def generate_sql_query(query_type, time_range_days, min_magnitude, region):
             TRY_CAST(longitude AS DOUBLE) as longitude,
             TRY_CAST(depth_km AS DOUBLE) as depth_km,
             source
-        FROM earthquakes
-        WHERE year >= '{start_date.year}'
-          AND TRY_CAST(magnitude AS DOUBLE) >= {min_magnitude}
+        FROM data
+        WHERE TRY_CAST(magnitude AS DOUBLE) >= {min_magnitude}
           AND TRY(date_parse(time, '%Y-%m-%dT%H:%i:%s')) >= date_parse('{start_date_str}', '%Y-%m-%d')
           AND TRY(date_parse(time, '%Y-%m-%dT%H:%i:%s')) <= date_parse('{end_date_str}', '%Y-%m-%d')
           {region_filter}
@@ -114,9 +111,8 @@ def generate_sql_query(query_type, time_range_days, min_magnitude, region):
             COUNT(*) as event_count,
             AVG(TRY_CAST(magnitude AS DOUBLE)) as avg_magnitude,
             MAX(TRY_CAST(magnitude AS DOUBLE)) as max_magnitude
-        FROM earthquakes
-        WHERE year >= '{start_date.year}'
-          AND TRY_CAST(magnitude AS DOUBLE) >= {min_magnitude}
+        FROM data
+        WHERE TRY_CAST(magnitude AS DOUBLE) >= {min_magnitude}
           AND TRY(date_parse(time, '%Y-%m-%dT%H:%i:%s')) >= date_parse('{start_date_str}', '%Y-%m-%d')
           AND TRY(date_parse(time, '%Y-%m-%dT%H:%i:%s')) <= date_parse('{end_date_str}', '%Y-%m-%d')
           {region_filter}

@@ -140,6 +140,42 @@ cat response.json | jq .
 }
 ```
 
+### Known Issue: TABLE_NOT_FOUND
+
+After fixing the bucket configuration, you may encounter:
+```
+TABLE_NOT_FOUND: Table 'awsdatacatalog.groundsense_dev_seismic_data.earthquakes' does not exist
+```
+
+**This is expected** if:
+1. Phase 1 Glue Crawler hasn't run yet (scheduled daily at 3am UTC)
+2. No seismic data has been archived to S3 yet (USGS ingestor runs hourly)
+
+**Resolution**:
+```bash
+# Option 1: Manually trigger the ingestor to populate data
+aws lambda invoke \
+  --function-name groundsense-dev-ingest-usgs \
+  --payload '{}' \
+  /tmp/ingest-response.json
+
+# Option 2: Manually trigger the Glue Crawler
+aws glue start-crawler --name groundsense-dev-seismic-crawler
+
+# Wait for crawler completion (1-5 minutes)
+aws glue get-crawler --name groundsense-dev-seismic-crawler \
+  | jq '.Crawler.State'
+# Wait until State = "READY"
+
+# Verify table was created
+aws glue get-table \
+  --database-name groundsense_dev_seismic_data \
+  --name earthquakes \
+  | jq '{TableName: .Table.Name, CreatedBy: .Table.CreatedBy, CreateTime: .Table.CreateTime}'
+
+# Then retry the Athena query test above
+```
+
 ## AWS Lab Environment Note
 
 If deploying in AWS Academy Lab:

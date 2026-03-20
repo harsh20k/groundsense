@@ -511,6 +511,53 @@ Error: Unable to verify/create output bucket groundsense-dev-athena-results
 
 **Deployment Note**: Requires `terraform apply` in `infra/phase3/` to update Lambda configuration and IAM roles.
 
+### Athena Query Failure - Table Not Found
+
+**Symptom**: After fixing bucket error, Lambda fails with:
+```
+TABLE_NOT_FOUND: Table 'awsdatacatalog.groundsense_dev_seismic_data.earthquakes' does not exist
+```
+
+**Root Cause**: Glue Crawler hasn't created the table yet
+
+**Prerequisites for Athena queries to work**:
+1. ✅ Phase 1 infrastructure deployed (storage, analytics, ingestors)
+2. ⏳ USGS ingestor Lambda has run and written data to S3
+3. ⏳ Glue Crawler has run and cataloged the data
+
+**Verification Steps**:
+```bash
+# Check if S3 has data (requires s3:ListBucket permission)
+aws s3 ls s3://groundsense-dev-seismic-archive/data/ --recursive | head -20
+
+# Check Glue database exists (requires glue:GetDatabase permission)
+aws glue get-database --name groundsense_dev_seismic_data
+
+# Check if table exists (requires glue:GetTable permission)
+aws glue get-table --database-name groundsense_dev_seismic_data --name earthquakes
+
+# Manually trigger crawler if it hasn't run yet
+aws glue start-crawler --name groundsense-dev-seismic-crawler
+
+# Wait for crawler to finish (usually 1-5 minutes)
+aws glue get-crawler --name groundsense-dev-seismic-crawler \
+  | jq '.Crawler.State'
+# Expected: "READY" when done
+```
+
+**Timeline**:
+- USGS ingestor runs hourly via EventBridge
+- First run populates DynamoDB + archives to S3
+- Glue Crawler scheduled for 3am UTC daily
+- **OR** manually trigger crawler after first ingestor run
+
+**Workaround for Testing**:
+If you need immediate testing before data is available:
+1. Manually invoke USGS ingestor Lambda to populate data
+2. Manually trigger Glue Crawler to catalog data
+3. Wait ~5 minutes for crawler completion
+4. Test Athena query again
+
 ---
 
 ## Next Steps (Phase 4)
