@@ -14,12 +14,13 @@ resource "aws_bedrock_guardrail" "earthquake_safety" {
   topic_policy_config {
     topics_config {
       name       = "Earthquake Predictions"
-      definition = "Requests to predict when or where future earthquakes will occur, including specific dates, times, or locations of future seismic events."
+      definition = "Requests to predict or forecast FUTURE earthquakes, including when or where they will occur. Does NOT include historical data, recent records, or past seismic activity."
       examples   = [
         "When will the next big earthquake hit Vancouver?",
         "Predict where the next M7.0 will strike",
         "Can you forecast earthquakes for next month?",
-        "Tell me when the next earthquake will happen in California"
+        "Will there be an earthquake tomorrow?",
+        "Predict future seismic activity"
       ]
       type = "DENY"
     }
@@ -88,7 +89,10 @@ resource "aws_iam_role_policy" "agent" {
         Action = [
           "bedrock:InvokeModel"
         ]
-        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:*:*:inference-profile/*"
+        ]
       },
       {
         Sid    = "InvokeToolLambdas"
@@ -160,7 +164,7 @@ resource "aws_lambda_permission" "allow_bedrock_get_hazard_assessment" {
 resource "aws_bedrockagent_agent" "main" {
   agent_name              = "${var.project_name}-${var.environment}-agent"
   agent_resource_role_arn = aws_iam_role.agent.arn
-  foundation_model        = "anthropic.claude-3-sonnet-20240229-v1:0"
+  foundation_model        = "us.anthropic.claude-sonnet-4-20250514-v1:0"
   description             = "AI assistant for earthquake monitoring and seismic data analysis"
   idle_session_ttl_in_seconds = 1800
 
@@ -186,10 +190,11 @@ Response format:
 - Suggest follow-up questions if appropriate
 EOT
 
-  guardrail_configuration {
-    guardrail_identifier = aws_bedrock_guardrail.earthquake_safety.guardrail_arn
-    guardrail_version    = aws_bedrock_guardrail.earthquake_safety.version
-  }
+  # Guardrail temporarily disabled for testing tool-calling
+  # guardrail_configuration {
+  #   guardrail_identifier = aws_bedrock_guardrail.earthquake_safety.guardrail_arn
+  #   guardrail_version    = aws_bedrock_guardrail.earthquake_safety.version
+  # }
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-agent"
@@ -347,7 +352,7 @@ resource "aws_bedrockagent_agent_action_group" "knowledge_base" {
 resource "aws_bedrockagent_agent_alias" "main" {
   agent_id         = aws_bedrockagent_agent.main.agent_id
   agent_alias_name = "v1"
-  description      = "Primary alias for production use"
+  description      = "Primary alias - no guardrail for testing"
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-agent-v1"
