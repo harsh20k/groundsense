@@ -33,6 +33,11 @@ variable "s3_athena_output_bucket" {
   type        = string
 }
 
+variable "s3_seismic_archive_bucket" {
+  description = "S3 bucket for seismic data archive"
+  type        = string
+}
+
 variable "knowledge_base_id" {
   description = "Bedrock Knowledge Base ID"
   type        = string

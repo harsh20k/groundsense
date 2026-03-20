@@ -164,10 +164,18 @@ resource "aws_iam_role_policy" "analyze_historical_patterns" {
         Sid    = "S3AthenaResults"
         Effect = "Allow"
         Action = [
+          "s3:GetBucketLocation",
           "s3:GetObject",
+          "s3:ListBucket",
+          "s3:ListBucketMultipartUploads",
+          "s3:ListMultipartUploadParts",
+          "s3:AbortMultipartUpload",
           "s3:PutObject"
         ]
-        Resource = "arn:aws:s3:::${var.s3_athena_output_bucket}/athena-results/*"
+        Resource = [
+          "arn:aws:s3:::${var.s3_athena_output_bucket}",
+          "arn:aws:s3:::${var.s3_athena_output_bucket}/*"
+        ]
       },
       {
         Sid    = "S3DataLakeRead"
@@ -177,8 +185,8 @@ resource "aws_iam_role_policy" "analyze_historical_patterns" {
           "s3:ListBucket"
         ]
         Resource = [
-          "arn:aws:s3:::${var.s3_athena_output_bucket}",
-          "arn:aws:s3:::${var.s3_athena_output_bucket}/*"
+          "arn:aws:s3:::${var.s3_seismic_archive_bucket}",
+          "arn:aws:s3:::${var.s3_seismic_archive_bucket}/*"
         ]
       }
     ]

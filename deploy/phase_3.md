@@ -9,6 +9,22 @@
 4. Added 3 action groups with function schemas
 5. Implemented basic guardrails (earthquake prediction blocking)
 6. Successfully validated Terraform plan (20 resources to create)
+7. **Fixed Athena bucket configuration** (separate output bucket from data lake)
+
+🔧 **Recent Fixes** (March 19, 2026):
+- Fixed `s3_athena_output_bucket` configuration in `terraform.tfvars`
+  - Was: `groundsense-dev-seismic-archive` ❌
+  - Now: `groundsense-dev-athena-results` ✅
+- Enhanced IAM permissions for `analyze_historical_patterns` Lambda
+  - Added bucket-level permissions for Athena operations
+  - Separated athena-results (write) from seismic-archive (read) permissions
+
+**Files Modified**:
+1. `infra/phase3/terraform.tfvars` - Fixed bucket name configuration
+2. `infra/phase3/variables.tf` - Added `s3_seismic_archive_bucket` variable
+3. `infra/phase3/main.tf` - Passed new variable to agent_tools module
+4. `infra/phase3/modules/agent_tools/variables.tf` - Added seismic archive bucket var
+5. `infra/phase3/modules/agent_tools/main.tf` - Enhanced S3 IAM permissions
 
 ## Phase 3 Infrastructure Overview
 
@@ -90,11 +106,12 @@ Before testing the agent, verify each Lambda function works:
 
 ```bash
 aws lambda invoke \
-  --function-name groundsense-dev-get-recent-earthquakes \
-  --payload '{"actionGroup": "RecentDataQueries", "function": "get_recent_earthquakes", "parameters": [{"name": "min_magnitude", "value": "4.0"}, {"name": "limit", "value": "10"}]}' \
-  response.json
+--function-name groundsense-dev-get-recent-earthquakes \
+--cli-binary-format raw-in-base64-out \
+--payload '{"actionGroup": "RecentDataQueries", "function": "get_recent_earthquakes", "parameters": [{"name": "min_magnitude", "value": "4.0"}, {"name": "limit", "value": "10"}]}' \
+response.json
 
-cat response.json | jq
+cat response.json | jq .
 ```
 
 Expected output: List of recent earthquakes above M4.0
@@ -104,10 +121,11 @@ Expected output: List of recent earthquakes above M4.0
 ```bash
 aws lambda invoke \
   --function-name groundsense-dev-analyze-patterns \
+  --cli-binary-format raw-in-base64-out \
   --payload '{"actionGroup": "HistoricalAnalytics", "function": "analyze_historical_patterns", "parameters": [{"name": "query_type", "value": "count"}, {"name": "time_range_days", "value": "365"}, {"name": "min_magnitude", "value": "3.0"}]}' \
   response.json
 
-cat response.json | jq
+cat response.json | jq .
 ```
 
 Expected output: Count of earthquakes above M3.0 in the last year
@@ -474,6 +492,24 @@ aws lambda invoke --function-name groundsense-dev-get-recent-earthquakes \
 - Rephrase query to avoid prediction language
 - Update guardrail denied topics to be more specific
 - Example: Instead of "Will there be more earthquakes?", ask "What are historical patterns?"
+
+### Athena Query Failure - Output Bucket Error
+
+**Symptom**: `analyze_historical_patterns` Lambda fails with:
+```
+Error: Unable to verify/create output bucket groundsense-dev-athena-results
+```
+
+**Root Cause**: Configuration mismatch between Lambda environment variables and IAM permissions
+
+**Fixed in Code**:
+1. ✅ Updated `terraform.tfvars`: `s3_athena_output_bucket = "groundsense-dev-athena-results"`
+2. ✅ Added separate variable: `s3_seismic_archive_bucket = "groundsense-dev-seismic-archive"`
+3. ✅ Updated IAM policy to grant full Athena-required S3 permissions:
+   - `s3:GetBucketLocation`, `s3:ListBucket`, `s3:PutObject` on athena-results bucket
+   - Separated data lake read permissions (seismic-archive bucket)
+
+**Deployment Note**: Requires `terraform apply` in `infra/phase3/` to update Lambda configuration and IAM roles.
 
 ---
 

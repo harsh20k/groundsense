@@ -1,14 +1,15 @@
 module "agent_tools" {
   source = "./modules/agent_tools"
 
-  project_name             = var.project_name
-  environment              = var.environment
-  aws_region               = var.aws_region
-  dynamodb_table_name      = var.dynamodb_table_name
-  athena_workgroup_name    = var.athena_workgroup_name
-  glue_database_name       = var.glue_database_name
-  s3_athena_output_bucket  = var.s3_athena_output_bucket
-  knowledge_base_id        = var.knowledge_base_id
+  project_name                = var.project_name
+  environment                 = var.environment
+  aws_region                  = var.aws_region
+  dynamodb_table_name         = var.dynamodb_table_name
+  athena_workgroup_name       = var.athena_workgroup_name
+  glue_database_name          = var.glue_database_name
+  s3_athena_output_bucket     = var.s3_athena_output_bucket
+  s3_seismic_archive_bucket   = var.s3_seismic_archive_bucket
+  knowledge_base_id           = var.knowledge_base_id
 }
 
 module "bedrock_agent" {
