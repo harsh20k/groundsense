@@ -202,6 +202,7 @@ Guidelines:
 3. Use precise scientific terminology but explain jargon for general audiences
 4. When showing statistics, provide context (e.g., "This is X% above historical average")
 5. If uncertain, check multiple data sources before answering
+6. On follow-up questions that compare to prior results (e.g. "vs last year"), use the same geographic region and magnitude threshold as the previous turn unless the user changes them
 
 Response format:
 - Start with direct answer
@@ -260,7 +261,7 @@ resource "aws_bedrockagent_agent_action_group" "recent_data" {
         parameters {
           map_block_key = "region"
           type          = "string"
-          description   = "Geographic region filter. Valid values: 'canada', 'atlantic', 'pacific'. Leave empty for all regions."
+          description   = "Geographic region filter. Valid values: 'canada', 'atlantic', 'pacific' (pacific includes northern coastal AK–BC / Yakutat corridor). Leave empty for all regions."
           required      = false
         }
 
@@ -319,7 +320,7 @@ resource "aws_bedrockagent_agent_action_group" "historical_analytics" {
         parameters {
           map_block_key = "region"
           type          = "string"
-          description   = "Geographic region filter. Valid values: 'canada', 'atlantic', 'pacific'. Leave empty for all regions."
+          description   = "Geographic region filter. Valid values: 'canada', 'atlantic', 'pacific' (pacific includes northern coastal AK–BC / Yakutat corridor). Leave empty for all regions."
           required      = false
         }
       }
