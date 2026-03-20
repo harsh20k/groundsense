@@ -7,7 +7,7 @@ This tool is invoked by the Bedrock Agent when users ask about recent seismic ac
 Input Parameters:
 - min_magnitude: Minimum magnitude threshold (default: 0.0)
 - max_magnitude: Maximum magnitude threshold (default: 10.0)
-- region: Optional geographic filter (canada, atlantic, pacific)
+- region: Optional geographic filter (canada, atlantic, pacific — pacific includes northern coastal AK–BC)
 - limit: Maximum number of results to return (default: 50)
 
 Output:
@@ -53,9 +53,9 @@ def filter_by_region(latitude, longitude, region):
     elif region == 'atlantic':
         return -67.0 <= longitude <= -52.0 and 43.0 <= latitude <= 55.0
     
-    # Pacific Canada: British Columbia coast
+    # Pacific: BC coast + northern AK panhandle (Yakutat corridor); matches analyze_historical_patterns
     elif region == 'pacific':
-        return -139.0 <= longitude <= -123.0 and 48.0 <= latitude <= 60.0
+        return -141.0 <= longitude <= -123.0 and 48.0 <= latitude <= 72.0
     
     # If unknown region, include all
     return True

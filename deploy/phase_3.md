@@ -2,14 +2,14 @@
 
 ## Implementation Status
 
-✅ **Completed**:
-1. Implemented 3 Lambda tool functions (DynamoDB, Athena, Bedrock KB)
+✅ **Completed** (March 20, 2026):
+1. Implemented **5 Lambda tool functions** (DynamoDB, Athena, Bedrock KB, Geocoding, Weather)
 2. Created complete Phase 3 infrastructure code (separate Terraform root)
-3. Configured Bedrock Agent with Claude 3 Sonnet
-4. Added 3 action groups with function schemas
+3. Configured Bedrock Agent with Claude Sonnet 4.0
+4. Added **5 action groups** with function schemas
 5. Implemented basic guardrails (earthquake prediction blocking)
-6. Successfully validated Terraform plan (20 resources to create)
-7. **Fixed Athena bucket configuration** (separate output bucket from data lake)
+6. Successfully deployed and tested all tools end-to-end
+7. Fixed Athena bucket configuration (separate output bucket from data lake)
 
 🔧 **Recent Fixes** (March 19, 2026):
 - Fixed `s3_athena_output_bucket` configuration in `terraform.tfvars`
@@ -31,32 +31,36 @@
 ### Architecture
 
 ```
-User Query → Bedrock Agent (Claude 3 Sonnet)
+User Query → Bedrock Agent (Claude Sonnet 4.0)
                 ↓
       ┌─────────┴─────────┐
       ├─ Tool 1: get_recent_earthquakes (DynamoDB)
       ├─ Tool 2: analyze_historical_patterns (Athena)
-      └─ Tool 3: get_hazard_assessment (Bedrock KB)
+      ├─ Tool 3: get_hazard_assessment (Bedrock KB)
+      ├─ Tool 4: get_location_context (Nominatim + KB)
+      └─ Tool 5: fetch_weather_at_epicenter (Open-Meteo)
                 ↓
           Synthesized Answer
 ```
 
 ### Resources Created
 
-**Lambda Tool Functions** (3):
+**Lambda Tool Functions** (5):
 - `groundsense-dev-get-recent-earthquakes` - Query DynamoDB for recent events
 - `groundsense-dev-analyze-patterns` - Run Athena queries for historical analysis
 - `groundsense-dev-get-hazard` - Retrieve from Bedrock Knowledge Base
+- `groundsense-dev-get-location-ctx` - Geocoding + tectonic context from KB
+- `groundsense-dev-fetch-weather` - Current/historical weather at epicenters
 
 **Bedrock Agent**:
-- Agent: `groundsense-dev-agent`
-- Model: Claude 3 Sonnet (`anthropic.claude-3-sonnet-20240229-v1:0`)
+- Agent: `groundsense-dev-agent` (ID: JBNWSD6MFJ)
+- Model: Claude Sonnet 4.0 (`us.anthropic.claude-sonnet-4-20250514-v1:0`)
 - Guardrail: `groundsense-dev-earthquake-safety` (blocks predictions)
-- Action Groups: 3 (RecentDataQueries, HistoricalAnalytics, KnowledgeBaseRetrieval)
-- Agent Alias: `v1`
+- Action Groups: **5** (RecentDataQueries, HistoricalAnalytics, KnowledgeBaseRetrieval, LocationIntelligence, WeatherContext)
+- Agent Aliases: `v1` (version 4), `v5-location-weather` (version 5 with all tools)
 
-**IAM Roles** (4):
-- 3 Lambda execution roles (minimal permissions per function)
+**IAM Roles** (6):
+- 5 Lambda execution roles (minimal permissions per function)
 - 1 Agent execution role (invoke Lambdas, access KB, apply guardrails)
 
 ### Deployment Blocked
@@ -274,6 +278,49 @@ chmod +x test_agent.py
 
 ---
 
+**Test 6: Location Intelligence**
+
+```bash
+./test_agent.py "What's the tectonic setting near Vancouver?"
+```
+
+**Expected Behavior**:
+- Agent calls `get_location_context(location_name="Vancouver")`
+- Tool geocodes "Vancouver" → 49.28°N, 123.12°W
+- Tool queries Knowledge Base for Cascadia Subduction Zone context
+- Returns: coordinates, nearest city, nearby population centers, tectonic context from reports
+
+---
+
+**Test 7: Weather + Noise Risk Assessment**
+
+```bash
+./test_agent.py "Show me recent M4+ earthquakes and tell me if weather could affect aftershock detection at any locations"
+```
+
+**Expected Behavior**:
+- Agent calls `get_recent_earthquakes(min_magnitude=4.0)`
+- For each epicenter, calls `fetch_weather_at_epicenter(lat, lon)`
+- Synthesizes weather + seismic noise risk for all locations
+- Flags any with high noise risk (heavy rain, strong winds, thunderstorms)
+
+---
+
+**Test 8: Historical Weather**
+
+```bash
+./test_agent.py "What was the weather like during the M5.0 Guatemala earthquake on March 18?"
+```
+
+**Expected Behavior**:
+- Agent calls `get_recent_earthquakes()` to find Guatemala earthquake
+- Extracts timestamp: 2026-03-18T17:35:31
+- Calls `fetch_weather_at_epicenter(lat=15.3861, lon=-89.0405, event_time="2026-03-18T17:35:31")`
+- Returns historical weather from Open-Meteo archive API
+- Result: 22.5°C, light drizzle, low noise risk
+
+---
+
 ## Agent Configuration Details
 
 ### System Prompt
@@ -351,6 +398,52 @@ Response format:
 
 ---
 
+#### LocationIntelligence
+
+**Function**: `get_location_context`
+
+**Parameters**:
+- `location_name` (string, optional): Place name to geocode (e.g., "Vancouver")
+- `latitude` (number, optional): Latitude (alternative to location_name)
+- `longitude` (number, optional): Longitude (alternative to location_name)
+- `max_kb_results` (integer, optional): Max KB chunks (default: 5)
+
+**Use Cases**:
+- "What's the tectonic setting near Vancouver?"
+- "Tell me about seismic hazards at 49.28N, 123.12W"
+- "What fault systems are near the Cascadia Subduction Zone?"
+
+**How it works**:
+- Forward geocodes place names → coordinates (Nominatim API)
+- Reverse geocodes coordinates → nearest city
+- Queries Knowledge Base for regional tectonic/seismic context
+- Returns nearby population centers
+
+---
+
+#### WeatherContext
+
+**Function**: `fetch_weather_at_epicenter`
+
+**Parameters**:
+- `latitude` (number, **required**): Epicenter latitude
+- `longitude` (number, **required**): Epicenter longitude
+- `event_time` (string, optional): ISO 8601 datetime for historical weather
+
+**Use Cases**:
+- "What are the weather conditions at the recent M5.2 earthquake?"
+- "Tell me the weather during the Guatemala earthquake"
+- "Could weather affect aftershock detection at this location?"
+
+**How it works**:
+- Fetches current weather from Open-Meteo forecast API
+- OR fetches historical weather from Open-Meteo archive API (if event_time provided)
+- Calculates seismic noise risk (low/moderate/high)
+- Identifies factors: heavy rain, strong winds, thunderstorms
+- Returns: temperature, wind speed, precipitation, weather description, noise risk
+
+---
+
 ## Guardrail Configuration
 
 ### Denied Topics
@@ -392,7 +485,7 @@ Response format:
 
 ## Files Created
 
-### Lambda Functions (3)
+### Lambda Functions (5)
 ```
 lambda/tools/
 ├── get_recent_earthquakes/
@@ -401,9 +494,15 @@ lambda/tools/
 ├── analyze_historical_patterns/
 │   ├── handler.py          # Athena query logic
 │   └── requirements.txt
-└── get_hazard_assessment/
-    ├── handler.py          # Bedrock KB retrieval logic
-    └── requirements.txt
+├── get_hazard_assessment/
+│   ├── handler.py          # Bedrock KB retrieval logic
+│   └── requirements.txt
+├── get_location_context/
+│   ├── handler.py          # Nominatim geocoding + KB context
+│   └── requirements.txt (none needed - stdlib only)
+└── fetch_weather_at_epicenter/
+    ├── handler.py          # Open-Meteo weather API
+    └── requirements.txt (none needed - stdlib only)
 ```
 
 ### Phase 3 Infrastructure
@@ -576,21 +675,27 @@ Once Phase 3 is validated:
 
 ## Validation Checklist
 
-✅ All 3 Lambda tools deployed and individually testable
+✅ All 5 Lambda tools deployed and individually testable
 
-✅ Bedrock Agent responds to queries via CLI
+✅ Bedrock Agent responds to queries via CLI (Agent ID: JBNWSD6MFJ)
 
 ✅ Agent autonomously selects correct tools based on query type
 
-✅ Multi-tool queries work (agent chains multiple tool calls)
+✅ Multi-tool queries work (agent chains 3+ tool calls)
+
+✅ **Location Intelligence**: Geocoding + tectonic context retrieval validated
+
+✅ **Weather Context**: Current & historical weather retrieval validated
+
+✅ **Seismic noise risk assessment**: Weather impact on aftershock detection working
 
 ✅ Guardrails block earthquake predictions
 
 ✅ Agent cites sources when using Knowledge Base
 
-✅ Terraform code validated (`terraform plan` succeeded with 20 resources)
+✅ Terraform infrastructure fully deployed (all resources created)
 
-⏳ **Pending**: Terraform apply with appropriate AWS permissions
+✅ Agent version 5 deployed with all 5 action groups
 
 ---
 
@@ -603,8 +708,8 @@ Once Phase 3 is validated:
 
 ---
 
-**Status**: Phase 3 implementation complete. Infrastructure code is production-ready and validated. Deployment requires AWS account with IAM role creation and Bedrock Agent permissions (use `tf-provisioner` user).
+**Status**: Phase 3 implementation complete and **fully deployed**. All 5 Lambda tools operational. Agent version 5 tested and validated with multi-tool chaining.
 
-**Estimated Deployment Time**: 5-10 minutes (once permissions available)
+**Deployment Date**: March 20, 2026
 
 **Next Phase**: Phase 4 - Response Formatting for Frontend Integration

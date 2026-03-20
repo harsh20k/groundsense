@@ -2,6 +2,13 @@
 # Response Formatter Lambda Function
 # =============================================
 
+data "aws_caller_identity" "current" {}
+
+# InvokeAgent is evaluated against the agent-alias ARN, not only the agent ARN.
+locals {
+  agent_alias_arn = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent-alias/${var.agent_id}/${var.agent_alias_id}"
+}
+
 data "archive_file" "response_formatter" {
   type        = "zip"
   source_dir  = "${path.module}/../../lambda/response_formatter"
@@ -89,7 +96,10 @@ resource "aws_iam_role_policy" "response_formatter_bedrock" {
         Action = [
           "bedrock:InvokeAgent"
         ]
-        Resource = var.agent_arn
+        Resource = [
+          var.agent_arn,
+          local.agent_alias_arn,
+        ]
       }
     ]
   })

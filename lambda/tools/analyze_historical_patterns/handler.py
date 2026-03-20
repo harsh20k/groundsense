@@ -8,7 +8,7 @@ Input Parameters:
 - query_type: Type of analysis (count, average, max, timeseries)
 - time_range_days: Number of days to analyze (default: 365)
 - min_magnitude: Minimum magnitude threshold (default: 0.0)
-- region: Optional geographic filter (canada, atlantic, pacific)
+- region: Optional geographic filter (canada, atlantic, pacific — pacific includes northern coastal AK–BC)
 
 Output:
 - Aggregated statistics or time-series data based on query_type
@@ -41,7 +41,9 @@ def build_region_filter(region):
     elif region == 'atlantic':
         return "AND longitude BETWEEN -67.0 AND -52.0 AND latitude BETWEEN 43.0 AND 55.0"
     elif region == 'pacific':
-        return "AND longitude BETWEEN -139.0 AND -123.0 AND latitude BETWEEN 48.0 AND 60.0"
+        # Include northern AK panhandle / Yakutat corridor (often tagged "near BC");
+        # prior box cut off lat>60 and lon<-139, skewing multi-turn vs get_recent_earthquakes.
+        return "AND longitude BETWEEN -141.0 AND -123.0 AND latitude BETWEEN 48.0 AND 72.0"
     
     return ""
 
