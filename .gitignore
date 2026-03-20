@@ -39,3 +39,7 @@ Admin/
 .cursor/
 .obsidian/
 notes/
+
+# Deploy diagrams and generated images
+deploy/images/
+deploy/diagrams/

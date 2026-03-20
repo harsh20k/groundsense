@@ -32,6 +32,11 @@ bedrock_agent_runtime = boto3.client('bedrock-agent-runtime')
 AGENT_ID = os.environ.get('AGENT_ID')
 AGENT_ALIAS_ID = os.environ.get('AGENT_ALIAS_ID')
 
+CORS_HEADERS = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+}
+
 
 def _parse_request_body(event):
     """
@@ -66,13 +71,15 @@ def lambda_handler(event, context):
     if not query:
         return {
             'statusCode': 400,
-            'body': json.dumps({'error': 'Query parameter is required'})
+            'headers': CORS_HEADERS,
+            'body': json.dumps({'error': 'Query parameter is required'}),
         }
-    
+
     if not AGENT_ID or not AGENT_ALIAS_ID:
         return {
             'statusCode': 500,
-            'body': json.dumps({'error': 'Agent configuration missing'})
+            'headers': CORS_HEADERS,
+            'body': json.dumps({'error': 'Agent configuration missing'}),
         }
     
     try:
@@ -156,11 +163,8 @@ def lambda_handler(event, context):
         
         return {
             'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps(result)
+            'headers': CORS_HEADERS,
+            'body': json.dumps(result),
         }
         
     except Exception as e:
@@ -171,11 +175,12 @@ def lambda_handler(event, context):
         
         return {
             'statusCode': 500,
+            'headers': CORS_HEADERS,
             'body': json.dumps({
                 'error': error_msg,
                 'message': '',
-                'visualization': {'type': 'none'}
-            })
+                'visualization': {'type': 'none'},
+            }),
         }
 
 

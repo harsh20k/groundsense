@@ -13,16 +13,13 @@
 
 ### Architecture
 
-```
-Client Request
-    ↓
-Response Formatter Lambda (with Function URL)
-    ↓ (enableTrace=True)
-Bedrock Agent (JBNWSD6MFJ)
-    ↓
-5 Tool Lambdas
-    ↓
-Structured JSON Response
+![Phase 4 architecture — client through formatter to Bedrock and tools](./images/phase4_architecture.png)
+
+*Source:* [`diagrams/phase4_architecture.py`](./diagrams/phase4_architecture.py) — regenerate:
+
+```bash
+cd deploy/diagrams && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt
+./venv/bin/python phase4_architecture.py
 ```
 
 ### What Phase 4 Adds
@@ -646,4 +643,4 @@ Once Phase 4 is validated:
 
 **Status**: Phase 4 implementation complete. Ready for deployment.
 
-**Next Phase**: Phase 5 - Frontend Web App + API Gateway
+**Next Phase**: [Phase 5 - Frontend Web App + API Gateway](./phase_5.md)

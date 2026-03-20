@@ -13,8 +13,8 @@ The AI agent autonomously decides which tools to use, fetches real-time and hist
 
 ## Architecture
 
-- **Frontend**: Single-page web app (S3 + CloudFront)
-- **Backend**: API Gateway → Lambda → Bedrock Agent 
+- **Frontend**: Single-page web app (S3 + CloudFront) — see [deploy/phase_5.md](deploy/phase_5.md)
+- **Backend**: API Gateway → Lambda (response formatter) → Bedrock Agent
 - **Data Pipeline**: EventBridge Scheduler for ingestors, S3 event notifications for fanout
 - **Storage**: DynamoDB (recent data), S3 (historical archive), Bedrock Knowledge Base (RAG for narrative documents)
 - **Alerts**: S3-triggered Lambda → SNS notifications for M5.0+ events
@@ -85,6 +85,13 @@ terraform init
 terraform apply
 ```
 
+### Phase 5: Web UI + API Gateway
+
+After Phase 3–4 (Bedrock agent + response formatter Lambda), deploy the hosted chat UI and API Gateway front end:
+
+- Terraform: `infra/phase5` — see **[deploy/phase_5.md](deploy/phase_5.md)**
+- App source: `frontend/` (Vite + React)
+
 ### Outputs
 
 After deployment, Terraform will output:
@@ -152,24 +159,18 @@ See [Build Plan](notes/Build%20Plan.md) for full roadmap
 
 ```
 groundsense/
-├── infra/                    # Terraform infrastructure
-│   ├── modules/
-│   │   ├── storage/          # DynamoDB + S3
-│   │   ├── ingestors/        # Poller Lambdas
-│   │   ├── triggers/         # Alert + KB sync Lambdas
-│   │   └── analytics/        # Glue + Athena
-│   ├── main.tf
-│   ├── providers.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   └── terraform.tfvars.example
+├── infra/                    # Terraform (phases: root, phase2–5)
+│   ├── modules/              # Shared modules (storage, ingestors, …)
+│   ├── phase4/               # Response formatter Lambda (+ optional Function URL)
+│   ├── phase5/               # API Gateway + S3 + CloudFront (web UI hosting)
+│   └── …
+├── frontend/                 # Phase 5 SPA (Vite + React)
 ├── lambda/                   # Lambda function source code
+│   ├── response_formatter/
 │   ├── seismic_poller/
-│   ├── document_fetcher/
-│   ├── alert/
-│   └── kb_sync/
-└── notes/                    # Project documentation
-    └── Build Plan.md
+│   └── …
+├── deploy/                   # Phase deployment guides (phase_4.md, phase_5.md, …)
+└── notes/
 ```
 
 ## License

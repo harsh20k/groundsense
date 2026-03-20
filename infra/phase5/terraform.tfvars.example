@@ -1,0 +1,8 @@
+aws_region   = "us-east-1"
+project_name = "groundsense"
+environment  = "dev"
+
+# From Phase 4: cd ../phase4 && terraform output -raw formatter_function_name
+formatter_lambda_name = "groundsense-dev-response-formatter"
+
+api_stage_name = "dev"
