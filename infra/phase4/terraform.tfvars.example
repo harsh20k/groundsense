@@ -1,0 +1,11 @@
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Project Configuration
+project_name = "groundsense"
+environment  = "dev"
+
+# Phase 3 outputs (get these from: cd ../phase3 && terraform output)
+agent_id       = "your-agent-id"
+agent_alias_id = "your-agent-alias-id"
+agent_arn      = "your-agent-arn"
