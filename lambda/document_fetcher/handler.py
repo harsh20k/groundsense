@@ -11,35 +11,53 @@ s3 = boto3.client('s3')
 S3_BUCKET_NAME = os.environ['S3_BUCKET_NAME']
 
 
-def fetch_notable_events_list():
-    """Fetch list of notable earthquake events from NRCan."""
-    url = "https://earthquakescanada.nrcan.gc.ca/notable-event/index-en.php"
+def fetch_publication_list():
+    """Fetch list of earthquake publications from NRCan."""
+    url = "https://www.earthquakescanada.nrcan.gc.ca/pprs-pprp/index-en.php"
     
     try:
-        with urllib.request.urlopen(url, timeout=30) as response:
+        print(f"Fetching publications from: {url}")
+        req = urllib.request.Request(
+            url,
+            headers={'User-Agent': 'GroundSense/1.0'}
+        )
+        
+        with urllib.request.urlopen(req, timeout=30) as response:
             html = response.read().decode('utf-8')
             
-            # Parse for document links (simplified - in production use BeautifulSoup)
-            # Looking for patterns like: href=".*\.pdf" or notable event links
+            # Parse for PDF document links
             pdf_pattern = re.compile(r'href="([^"]*\.pdf)"', re.IGNORECASE)
             pdf_links = pdf_pattern.findall(html)
             
-            print(f"Found {len(pdf_links)} potential PDF links")
-            return pdf_links[:10]  # Limit to 10 for initial implementation
+            # Make URLs absolute
+            absolute_links = []
+            for link in pdf_links:
+                if link.startswith('/'):
+                    absolute_links.append(f"https://www.earthquakescanada.nrcan.gc.ca{link}")
+                elif not link.startswith('http'):
+                    absolute_links.append(f"https://www.earthquakescanada.nrcan.gc.ca/{link}")
+                else:
+                    absolute_links.append(link)
+            
+            print(f"Found {len(absolute_links)} PDF publications")
+            return absolute_links
     except urllib.error.URLError as e:
-        print(f"Error fetching notable events list: {e}")
+        print(f"Error fetching publication list: {e}")
+        return []
+    except Exception as e:
+        print(f"Unexpected error fetching publications: {e}")
         return []
 
 
 def download_and_upload_document(pdf_url):
-    """Download a PDF document and upload to S3."""
+    """Download a PDF document and upload to S3.
+    
+    Returns:
+        'uploaded' if successfully uploaded
+        'skipped' if already exists
+        'failed' if error occurred
+    """
     try:
-        # Make URL absolute if relative
-        if pdf_url.startswith('/'):
-            pdf_url = f"https://earthquakescanada.nrcan.gc.ca{pdf_url}"
-        elif not pdf_url.startswith('http'):
-            pdf_url = f"https://earthquakescanada.nrcan.gc.ca/{pdf_url}"
-        
         # Extract filename from URL
         filename = pdf_url.split('/')[-1]
         if not filename.endswith('.pdf'):
@@ -55,7 +73,7 @@ def download_and_upload_document(pdf_url):
         try:
             s3.head_object(Bucket=S3_BUCKET_NAME, Key=s3_key)
             print(f"Document {filename} already exists in S3, skipping")
-            return
+            return 'skipped'
         except s3.exceptions.ClientError:
             pass  # Document doesn't exist, proceed with upload
         
@@ -69,6 +87,11 @@ def download_and_upload_document(pdf_url):
         with urllib.request.urlopen(req, timeout=60) as response:
             pdf_content = response.read()
         
+        # Verify it's a PDF
+        if not pdf_content.startswith(b'%PDF'):
+            print(f"Warning: {filename} does not appear to be a valid PDF")
+            return 'failed'
+        
         # Upload to S3
         s3.put_object(
             Bucket=S3_BUCKET_NAME,
@@ -81,48 +104,56 @@ def download_and_upload_document(pdf_url):
             }
         )
         
-        print(f"Uploaded {filename} to S3 at {s3_key}")
+        print(f"✓ Uploaded {filename} to S3 at {s3_key} ({len(pdf_content)} bytes)")
+        return 'uploaded'
     
     except Exception as e:
-        print(f"Error downloading/uploading document {pdf_url}: {e}")
+        print(f"✗ Error downloading/uploading document {pdf_url}: {e}")
+        return 'failed'
 
 
 def lambda_handler(event, context):
     """Lambda handler for document fetching."""
-    print("Starting document fetch...")
+    print("Starting document fetch from NRCan Earthquakes Canada...")
     
-    # For Phase 1, we'll create a stub that demonstrates the capability
-    # In production, this would parse the NRCan notable events page
+    # Fetch and process earthquake publications
+    pdf_links = fetch_publication_list()
     
-    # Example stub: create a sample metadata document
-    now = datetime.utcnow()
-    stub_metadata = {
-        'title': 'GroundSense Document Fetcher - Stub',
-        'description': 'This is a Phase 1 stub. Phase 2 will fetch actual GSC PDFs.',
-        'timestamp': now.isoformat(),
-        'note': 'Replace this with actual PDF fetching from NRCan notable events page'
-    }
+    if not pdf_links:
+        print("No PDF links found to process")
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'No documents found to fetch',
+                'documents_processed': 0
+            })
+        }
     
-    s3_key = f"{now.year}/stub_metadata_{now.strftime('%Y%m%d_%H%M%S')}.json"
+    # Download and upload each PDF
+    successful_uploads = 0
+    failed_uploads = 0
+    skipped_uploads = 0
     
-    s3.put_object(
-        Bucket=S3_BUCKET_NAME,
-        Key=s3_key,
-        Body=json.dumps(stub_metadata, indent=2),
-        ContentType='application/json'
-    )
+    for pdf_url in pdf_links:
+        try:
+            result = download_and_upload_document(pdf_url)
+            if result == 'uploaded':
+                successful_uploads += 1
+            elif result == 'skipped':
+                skipped_uploads += 1
+        except Exception as e:
+            print(f"Failed to process {pdf_url}: {e}")
+            failed_uploads += 1
     
-    print(f"Created stub document at {s3_key}")
-    
-    # Fetch and process actual documents (commented out for Phase 1 stub)
-    # pdf_links = fetch_notable_events_list()
-    # for pdf_url in pdf_links:
-    #     download_and_upload_document(pdf_url)
+    print(f"Document fetch completed: {successful_uploads} uploaded, {skipped_uploads} skipped, {failed_uploads} failed")
     
     return {
         'statusCode': 200,
         'body': json.dumps({
-            'message': 'Document fetch completed (stub)',
-            'note': 'Phase 1 stub - will fetch actual PDFs in Phase 2'
+            'message': 'Document fetch completed',
+            'documents_found': len(pdf_links),
+            'documents_uploaded': successful_uploads,
+            'documents_skipped': skipped_uploads,
+            'documents_failed': failed_uploads
         })
     }

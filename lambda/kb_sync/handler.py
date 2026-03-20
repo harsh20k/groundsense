@@ -3,11 +3,27 @@ import os
 import boto3
 
 s3 = boto3.client('s3')
+bedrock_agent = boto3.client('bedrock-agent')
 
 
 def lambda_handler(event, context):
     """Lambda handler triggered by S3 events in documents bucket."""
     print(f"KB Sync Lambda triggered with event: {json.dumps(event)}")
+    
+    # Get KB and Data Source IDs from environment variables
+    knowledge_base_id = os.environ.get('KNOWLEDGE_BASE_ID', '')
+    data_source_id = os.environ.get('DATA_SOURCE_ID', '')
+    
+    if not knowledge_base_id or not data_source_id:
+        print("WARNING: KNOWLEDGE_BASE_ID or DATA_SOURCE_ID not configured")
+        print("This Lambda needs to be configured with Phase 2 outputs")
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'KB sync skipped - not configured',
+                'note': 'Run Phase 2 deployment and add KB/DS IDs to terraform.tfvars'
+            })
+        }
     
     try:
         # Parse S3 event
@@ -17,25 +33,32 @@ def lambda_handler(event, context):
                 key = record['s3']['object']['key']
                 size = record['s3']['object'].get('size', 0)
                 
-                print(f"Processing document for KB sync: s3://{bucket}/{key}")
+                print(f"Processing new document: s3://{bucket}/{key}")
                 print(f"Document size: {size} bytes")
                 
-                # Phase 1 stub: log the document upload
-                print(f"[STUB] Document uploaded: {key}")
-                print(f"[STUB] Would trigger Bedrock Knowledge Base sync")
-                print(f"[STUB] Phase 2 will implement:")
-                print(f"  - Create Bedrock Knowledge Base")
-                print(f"  - Configure OpenSearch Serverless")
-                print(f"  - Start ingestion job for this document")
+                # Start ingestion job (processes all documents in data source)
+                print(f"Starting ingestion job for Knowledge Base: {knowledge_base_id}")
+                response = bedrock_agent.start_ingestion_job(
+                    knowledgeBaseId=knowledge_base_id,
+                    dataSourceId=data_source_id
+                )
                 
-                # Phase 2 implementation will look like:
-                # bedrock_agent = boto3.client('bedrock-agent')
-                # response = bedrock_agent.start_ingestion_job(
-                #     knowledgeBaseId='<KB_ID>',
-                #     dataSourceId='<DATA_SOURCE_ID>'
-                # )
+                ingestion_job_id = response['ingestionJob']['ingestionJobId']
+                status = response['ingestionJob']['status']
                 
-                print(f"KB sync stub completed for {key}")
+                print(f"✓ Started ingestion job: {ingestion_job_id}")
+                print(f"  Status: {status}")
+                print(f"  Note: This job will sync ALL documents in the data source")
+                
+                return {
+                    'statusCode': 200,
+                    'body': json.dumps({
+                        'message': 'KB sync initiated successfully',
+                        'ingestion_job_id': ingestion_job_id,
+                        'status': status,
+                        'document': f"s3://{bucket}/{key}"
+                    })
+                }
     
     except Exception as e:
         print(f"Error processing KB sync: {e}")
@@ -44,7 +67,7 @@ def lambda_handler(event, context):
     return {
         'statusCode': 200,
         'body': json.dumps({
-            'message': 'KB sync processed (stub)',
-            'note': 'Phase 1 stub - will sync with Bedrock Knowledge Base in Phase 2'
+            'message': 'KB sync completed',
+            'note': 'No new documents to process'
         })
     }
