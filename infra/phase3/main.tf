@@ -21,5 +21,7 @@ module "bedrock_agent" {
   get_recent_earthquakes_lambda_arn      = module.agent_tools.get_recent_earthquakes_function_arn
   analyze_historical_patterns_lambda_arn = module.agent_tools.analyze_historical_patterns_function_arn
   get_hazard_assessment_lambda_arn       = module.agent_tools.get_hazard_assessment_function_arn
+  get_location_context_lambda_arn        = module.agent_tools.get_location_context_function_arn
+  fetch_weather_at_epicenter_lambda_arn  = module.agent_tools.fetch_weather_at_epicenter_function_arn
   knowledge_base_id                      = var.knowledge_base_id
 }

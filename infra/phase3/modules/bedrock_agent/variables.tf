@@ -28,6 +28,16 @@ variable "get_hazard_assessment_lambda_arn" {
   type        = string
 }
 
+variable "get_location_context_lambda_arn" {
+  description = "ARN of get_location_context Lambda function"
+  type        = string
+}
+
+variable "fetch_weather_at_epicenter_lambda_arn" {
+  description = "ARN of fetch_weather_at_epicenter Lambda function"
+  type        = string
+}
+
 variable "knowledge_base_id" {
   description = "Bedrock Knowledge Base ID"
   type        = string

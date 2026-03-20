@@ -303,3 +303,151 @@ resource "aws_lambda_function" "get_hazard_assessment" {
     Environment = var.environment
   }
 }
+
+# ========================================
+# Lambda Function 4: get_location_context
+# ========================================
+
+data "archive_file" "get_location_context" {
+  type        = "zip"
+  source_dir  = "${path.module}/../../../../lambda/tools/get_location_context"
+  output_path = "${path.module}/lambda_packages/get_location_context.zip"
+}
+
+resource "aws_iam_role" "get_location_context" {
+  name = "${var.project_name}-${var.environment}-get-location-ctx"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-get-location-ctx"
+    Project     = var.project_name
+    Environment = var.environment
+  }
+}
+
+resource "aws_iam_role_policy" "get_location_context" {
+  name = "${var.project_name}-${var.environment}-get-location-ctx-policy"
+  role = aws_iam_role.get_location_context.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CloudWatchLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}-${var.environment}-get-location-ctx:*"
+      },
+      {
+        Sid    = "BedrockKnowledgeBase"
+        Effect = "Allow"
+        Action = [
+          "bedrock:Retrieve"
+        ]
+        Resource = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:knowledge-base/${var.knowledge_base_id}"
+      }
+    ]
+  })
+}
+
+resource "aws_lambda_function" "get_location_context" {
+  filename         = data.archive_file.get_location_context.output_path
+  function_name    = "${var.project_name}-${var.environment}-get-location-ctx"
+  role             = aws_iam_role.get_location_context.arn
+  handler          = "handler.lambda_handler"
+  source_code_hash = data.archive_file.get_location_context.output_base64sha256
+  runtime          = "python3.12"
+  timeout          = 30
+  memory_size      = 256
+
+  environment {
+    variables = {
+      KNOWLEDGE_BASE_ID = var.knowledge_base_id
+    }
+  }
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-get-location-ctx"
+    Project     = var.project_name
+    Environment = var.environment
+  }
+}
+
+# ========================================
+# Lambda Function 5: fetch_weather_at_epicenter
+# ========================================
+
+data "archive_file" "fetch_weather_at_epicenter" {
+  type        = "zip"
+  source_dir  = "${path.module}/../../../../lambda/tools/fetch_weather_at_epicenter"
+  output_path = "${path.module}/lambda_packages/fetch_weather_at_epicenter.zip"
+}
+
+resource "aws_iam_role" "fetch_weather_at_epicenter" {
+  name = "${var.project_name}-${var.environment}-fetch-weather"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-fetch-weather"
+    Project     = var.project_name
+    Environment = var.environment
+  }
+}
+
+resource "aws_iam_role_policy" "fetch_weather_at_epicenter" {
+  name = "${var.project_name}-${var.environment}-fetch-weather-policy"
+  role = aws_iam_role.fetch_weather_at_epicenter.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "CloudWatchLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.project_name}-${var.environment}-fetch-weather:*"
+      }
+    ]
+  })
+}
+
+resource "aws_lambda_function" "fetch_weather_at_epicenter" {
+  filename         = data.archive_file.fetch_weather_at_epicenter.output_path
+  function_name    = "${var.project_name}-${var.environment}-fetch-weather"
+  role             = aws_iam_role.fetch_weather_at_epicenter.arn
+  handler          = "handler.lambda_handler"
+  source_code_hash = data.archive_file.fetch_weather_at_epicenter.output_base64sha256
+  runtime          = "python3.12"
+  timeout          = 30
+  memory_size      = 256
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-fetch-weather"
+    Project     = var.project_name
+    Environment = var.environment
+  }
+}

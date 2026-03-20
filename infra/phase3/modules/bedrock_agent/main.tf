@@ -103,7 +103,9 @@ resource "aws_iam_role_policy" "agent" {
         Resource = [
           var.get_recent_earthquakes_lambda_arn,
           var.analyze_historical_patterns_lambda_arn,
-          var.get_hazard_assessment_lambda_arn
+          var.get_hazard_assessment_lambda_arn,
+          var.get_location_context_lambda_arn,
+          var.fetch_weather_at_epicenter_lambda_arn
         ]
       },
       {
@@ -155,6 +157,24 @@ resource "aws_lambda_permission" "allow_bedrock_get_hazard_assessment" {
   principal     = "bedrock.amazonaws.com"
   source_account = data.aws_caller_identity.current.account_id
   source_arn    = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/*"
+}
+
+resource "aws_lambda_permission" "allow_bedrock_get_location_context" {
+  statement_id   = "AllowBedrockInvoke"
+  action         = "lambda:InvokeFunction"
+  function_name  = var.get_location_context_lambda_arn
+  principal      = "bedrock.amazonaws.com"
+  source_account = data.aws_caller_identity.current.account_id
+  source_arn     = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/*"
+}
+
+resource "aws_lambda_permission" "allow_bedrock_fetch_weather_at_epicenter" {
+  statement_id   = "AllowBedrockInvoke"
+  action         = "lambda:InvokeFunction"
+  function_name  = var.fetch_weather_at_epicenter_lambda_arn
+  principal      = "bedrock.amazonaws.com"
+  source_account = data.aws_caller_identity.current.account_id
+  source_arn     = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/*"
 }
 
 # ========================================
@@ -338,6 +358,103 @@ resource "aws_bedrockagent_agent_action_group" "knowledge_base" {
           map_block_key = "max_results"
           type          = "integer"
           description   = "Maximum number of relevant document chunks to return (default: 5)"
+          required      = false
+        }
+      }
+    }
+  }
+}
+
+# ========================================
+# Action Group 4: Location Intelligence
+# ========================================
+
+resource "aws_bedrockagent_agent_action_group" "location_intelligence" {
+  agent_id          = aws_bedrockagent_agent.main.agent_id
+  agent_version     = "DRAFT"
+  action_group_name = "LocationIntelligence"
+  description       = "Geocode place names and retrieve tectonic/seismic context from the Knowledge Base"
+
+  action_group_executor {
+    lambda = var.get_location_context_lambda_arn
+  }
+
+  function_schema {
+    member_functions {
+      functions {
+        name        = "get_location_context"
+        description = "Provides geographic and geological context about earthquake locations. Geocodes place names or reverse-geocodes coordinates, then queries the Knowledge Base for tectonic setting, fault systems, and seismic hazard information for that region. Use when users ask about the tectonic setting, fault systems, or seismic hazard of a specific location."
+
+        parameters {
+          map_block_key = "location_name"
+          type          = "string"
+          description   = "Place name to look up (e.g., 'Vancouver', 'Cascadia Subduction Zone', 'Halifax'). Provide this OR latitude/longitude."
+          required      = false
+        }
+
+        parameters {
+          map_block_key = "latitude"
+          type          = "number"
+          description   = "Latitude of the location in decimal degrees. Provide with longitude as an alternative to location_name."
+          required      = false
+        }
+
+        parameters {
+          map_block_key = "longitude"
+          type          = "number"
+          description   = "Longitude of the location in decimal degrees. Provide with latitude as an alternative to location_name."
+          required      = false
+        }
+
+        parameters {
+          map_block_key = "max_kb_results"
+          type          = "integer"
+          description   = "Maximum number of Knowledge Base document chunks to return (default: 5)"
+          required      = false
+        }
+      }
+    }
+  }
+}
+
+# ========================================
+# Action Group 5: Weather Context
+# ========================================
+
+resource "aws_bedrockagent_agent_action_group" "weather_context" {
+  agent_id          = aws_bedrockagent_agent.main.agent_id
+  agent_version     = "DRAFT"
+  action_group_name = "WeatherContext"
+  description       = "Retrieve current or historical weather conditions at earthquake epicenters"
+
+  action_group_executor {
+    lambda = var.fetch_weather_at_epicenter_lambda_arn
+  }
+
+  function_schema {
+    member_functions {
+      functions {
+        name        = "fetch_weather_at_epicenter"
+        description = "Retrieves weather conditions (temperature, wind, precipitation) at an earthquake epicenter using the Open-Meteo API. Includes a seismic noise risk assessment explaining how weather may affect aftershock detection. Use when users ask about weather conditions during an earthquake, or whether weather could affect seismometer readings or emergency response."
+
+        parameters {
+          map_block_key = "latitude"
+          type          = "number"
+          description   = "Epicenter latitude in decimal degrees (required)"
+          required      = true
+        }
+
+        parameters {
+          map_block_key = "longitude"
+          type          = "number"
+          description   = "Epicenter longitude in decimal degrees (required)"
+          required      = true
+        }
+
+        parameters {
+          map_block_key = "event_time"
+          type          = "string"
+          description   = "ISO 8601 datetime of the earthquake for historical weather lookup (e.g., '2024-03-15T14:30:00'). Omit for current conditions."
           required      = false
         }
       }
