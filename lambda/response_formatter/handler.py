@@ -316,18 +316,31 @@ def build_visualization(tool_calls):
     for call in tool_calls:
         if call['function'] == 'fetch_weather_at_epicenter' and call['output']:
             output = call['output']
-            
+            # Tool returns nested: { location, weather: { temperature_c, ... }, seismic_noise_risk: { level, factors } }
+            weather = output.get('weather') or {}
+            if not weather and output.get('temperature_c') is not None:
+                weather = output
+            location = output.get('location') or {}
+            risk_raw = output.get('seismic_noise_risk')
+            if isinstance(risk_raw, dict):
+                level = risk_raw.get('level')
+                noise_risk = str(level) if level is not None else 'unknown'
+            elif isinstance(risk_raw, str):
+                noise_risk = risk_raw
+            else:
+                noise_risk = 'unknown'
+
             return {
                 'type': 'weather_card',
                 'title': 'Weather at Epicenter',
                 'data': {
-                    'temperature': output.get('temperature_c'),
-                    'wind_speed': output.get('wind_speed_kmh'),
-                    'precipitation': output.get('precipitation_mm'),
-                    'description': output.get('weather_description', ''),
-                    'noise_risk': output.get('seismic_noise_risk', 'unknown'),
-                    'latitude': output.get('latitude'),
-                    'longitude': output.get('longitude')
+                    'temperature': weather.get('temperature_c'),
+                    'wind_speed': weather.get('wind_speed_kmh'),
+                    'precipitation': weather.get('precipitation_mm'),
+                    'description': weather.get('weather_description', ''),
+                    'noise_risk': noise_risk,
+                    'latitude': location.get('latitude'),
+                    'longitude': location.get('longitude'),
                 }
             }
     
