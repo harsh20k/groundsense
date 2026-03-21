@@ -1,6 +1,11 @@
 import { Line } from 'react-chartjs-2'
 import type { LineChartRow } from '../types'
 
+const lineColor = '#b85c3a'
+const lineFill = 'rgba(184, 92, 58, 0.12)'
+const tickColor = '#6b6256'
+const gridColor = 'rgba(107, 98, 86, 0.12)'
+
 interface Props {
   title?: string
   rows: LineChartRow[]
@@ -30,8 +35,8 @@ export function LineChartView({ title, rows }: Props) {
               {
                 label: 'Event count',
                 data: counts,
-                borderColor: '#38bdf8',
-                backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                borderColor: lineColor,
+                backgroundColor: lineFill,
                 fill: true,
                 tension: 0.25,
               },
@@ -41,16 +46,16 @@ export function LineChartView({ title, rows }: Props) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-              legend: { display: true, labels: { color: '#cbd5e1' } },
+              legend: { display: true, labels: { color: tickColor } },
             },
             scales: {
               x: {
-                ticks: { color: '#94a3b8', maxRotation: 45 },
-                grid: { color: 'rgba(148, 163, 184, 0.15)' },
+                ticks: { color: tickColor, maxRotation: 45 },
+                grid: { color: gridColor },
               },
               y: {
-                ticks: { color: '#94a3b8' },
-                grid: { color: 'rgba(148, 163, 184, 0.15)' },
+                ticks: { color: tickColor },
+                grid: { color: gridColor },
                 beginAtZero: true,
               },
             },

@@ -1,13 +1,18 @@
 :root {
-  --bg: #0f1419;
-  --surface: #1a222d;
-  --border: #2d3a47;
-  --text: #c8d1dc;
-  --text-dim: #8b98a8;
-  --heading: #f0f4f8;
-  --accent: #3d9cf5;
-  --accent-dim: rgba(61, 156, 245, 0.2);
-  --error: #f87171;
+  --bg: #faf7f2;
+  --surface: #f3ece3;
+  --surface-muted: #ebe3d8;
+  --surface-elevated: #fffefb;
+  --border: #e0d5c4;
+  --text: #4a4338;
+  --text-dim: #7a7064;
+  --heading: #2c261d;
+  --accent: #b85c3a;
+  --accent-dim: rgba(184, 92, 58, 0.14);
+  --accent-border: rgba(184, 92, 58, 0.35);
+  --button-on-accent: #fffefb;
+  --error: #b91c1c;
+  --error-border: rgba(185, 28, 28, 0.35);
 
   font-family: 'Segoe UI', system-ui, sans-serif;
   line-height: 1.45;
