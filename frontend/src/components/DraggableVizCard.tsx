@@ -1,7 +1,9 @@
-import { useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import Draggable from 'react-draggable'
+import type { RefObject } from 'react'
 import type { Visualization } from '../types'
 import { VisualizationRouter } from './VisualizationRouter'
+import type { CardCenter } from './VizCardEdges'
 
 interface Props {
   cardId: string
@@ -10,6 +12,8 @@ interface Props {
   y: number
   z: number
   mapHighlight: boolean
+  canvasRef: RefObject<HTMLElement | null>
+  onCardGeometry?: (id: string, center: CardCenter) => void
   onDrag: (id: string, x: number, y: number) => void
   onDragStart: (id: string) => void
   onDismiss: (id: string) => void
@@ -42,12 +46,43 @@ export function DraggableVizCard({
   y,
   z,
   mapHighlight,
+  canvasRef,
+  onCardGeometry,
   onDrag,
   onDragStart,
   onDismiss,
 }: Props) {
   const title = vizTitle(visualization)
   const nodeRef = useRef<HTMLDivElement>(null)
+
+  const reportGeometry = useCallback(() => {
+    if (!onCardGeometry) return
+    const canvas = canvasRef.current
+    const el = nodeRef.current
+    if (!canvas || !el) return
+    const cr = canvas.getBoundingClientRect()
+    const er = el.getBoundingClientRect()
+    onCardGeometry(cardId, {
+      x: er.left - cr.left + er.width / 2,
+      y: er.top - cr.top + er.height / 2,
+    })
+  }, [canvasRef, cardId, onCardGeometry])
+
+  useLayoutEffect(() => {
+    reportGeometry()
+  }, [x, y, visualization, reportGeometry])
+
+  useLayoutEffect(() => {
+    const el = nodeRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => reportGeometry())
+    ro.observe(el)
+    window.addEventListener('resize', reportGeometry)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', reportGeometry)
+    }
+  }, [reportGeometry])
 
   return (
     <Draggable
@@ -57,10 +92,14 @@ export function DraggableVizCard({
       bounds="parent"
       onStart={() => onDragStart(cardId)}
       onDrag={(_, data) => onDrag(cardId, data.x, data.y)}
-      onStop={(_, data) => onDrag(cardId, data.x, data.y)}
+      onStop={(_, data) => {
+        onDrag(cardId, data.x, data.y)
+        reportGeometry()
+      }}
     >
       <div
         ref={nodeRef}
+        data-viz-card-id={cardId}
         className={`viz-card-root ${mapHighlight ? 'viz-card--map-latest' : ''}`}
         style={{ zIndex: z }}
       >

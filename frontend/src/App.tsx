@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { invokeFormatter } from './api'
 import { DraggableVizCard } from './components/DraggableVizCard'
 import { MarkdownMessage } from './components/MarkdownMessage'
+import { VizCardEdges, type CardCenter, type VizEdge } from './components/VizCardEdges'
 import type { Visualization } from './types'
 import { PRESET_QUERIES } from './presetQueries'
 import './App.css'
@@ -39,39 +40,23 @@ function isMapVisualization(v: Visualization): boolean {
   return v.type === 'earthquake_map' || v.type === 'location_map'
 }
 
-function splitLatestMessages(messages: ChatMessage[]) {
-  const lastUserIndex = messages.reduce(
-    (idx, m, i) => (m.role === 'user' ? i : idx),
-    -1,
-  )
-  if (lastUserIndex < 0) {
-    return {
-      latestUser: null as ChatMessage | null,
-      latestReply: null as ChatMessage | null,
-      historyMessages: [] as ChatMessage[],
-    }
-  }
-  const latestUser = messages[lastUserIndex]
-  const latestReply =
-    messages.slice(lastUserIndex + 1).find((m) => m.role === 'assistant' || m.role === 'error') ??
-    null
-  const historyMessages = messages.slice(0, lastUserIndex)
-  return { latestUser, latestReply, historyMessages }
+let edgeCounter = 0
+function nextEdgeId(): string {
+  edgeCounter += 1
+  return `edge-${edgeCounter}`
 }
 
 export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [vizCards, setVizCards] = useState<VizCardModel[]>([])
+  const [cardEdges, setCardEdges] = useState<VizEdge[]>([])
+  const [cardCenters, setCardCenters] = useState<Record<string, CardCenter>>({})
   const [input, setInput] = useState('')
   const [sessionId, setSessionId] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
   const maxZRef = useRef(1)
-
-  const { latestUser, latestReply, historyMessages } = useMemo(
-    () => splitLatestMessages(messages),
-    [messages],
-  )
+  const canvasRef = useRef<HTMLElement>(null)
+  const messagesScrollRef = useRef<HTMLDivElement>(null)
 
   const latestMapOrder = useMemo(() => {
     const orders = vizCards
@@ -79,6 +64,20 @@ export default function App() {
       .map((c) => messageOrder(c.messageId))
     return orders.length ? Math.max(...orders) : 0
   }, [vizCards])
+
+  useEffect(() => {
+    const el = messagesScrollRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+  }, [messages, loading])
+
+  const handleCardGeometry = useCallback((id: string, center: CardCenter) => {
+    setCardCenters((prev) => {
+      const p = prev[id]
+      if (p && p.x === center.x && p.y === center.y) return prev
+      return { ...prev, [id]: center }
+    })
+  }, [])
 
   const handleDrag = useCallback((id: string, x: number, y: number) => {
     setVizCards((prev) => prev.map((c) => (c.id === id ? { ...c, x, y } : c)))
@@ -92,6 +91,13 @@ export default function App() {
 
   const handleDismissCard = useCallback((id: string) => {
     setVizCards((prev) => prev.filter((c) => c.id !== id))
+    setCardEdges((prev) => prev.filter((e) => e.from !== id && e.to !== id))
+    setCardCenters((prev) => {
+      if (!(id in prev)) return prev
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
   }, [])
 
   const send = useCallback(async () => {
@@ -99,7 +105,6 @@ export default function App() {
     if (!query || loading) return
 
     setInput('')
-    setHistoryOpen(false)
     const userId = nextId()
     setMessages((prev) => [...prev, { id: userId, role: 'user', text: query }])
     setLoading(true)
@@ -118,20 +123,28 @@ export default function App() {
         },
       ])
       if (res.visualization.type !== 'none') {
+        const newCardId = `v-${asstId}`
         setVizCards((prev) => {
           const n = prev.length
           maxZRef.current += 1
-          return [
-            ...prev,
-            {
-              id: `v-${asstId}`,
-              messageId: asstId,
-              visualization: res.visualization,
-              x: 40 + (n % 8) * 26,
-              y: 48 + (n % 5) * 24,
-              z: maxZRef.current,
-            },
-          ]
+          const newCard: VizCardModel = {
+            id: newCardId,
+            messageId: asstId,
+            visualization: res.visualization,
+            x: 40 + (n % 8) * 26,
+            y: 48 + (n % 5) * 24,
+            z: maxZRef.current,
+          }
+          if (prev.length > 0) {
+            const from = prev[prev.length - 1].id
+            queueMicrotask(() =>
+              setCardEdges((edges) => [
+                ...edges,
+                { id: nextEdgeId(), from, to: newCardId },
+              ]),
+            )
+          }
+          return [...prev, newCard]
         })
       }
     } catch (e) {
@@ -162,129 +175,120 @@ export default function App() {
         </div>
       </header>
 
-      <main className="viz-canvas" aria-label="Visualization canvas">
-        {vizCards.map((card) => (
-          <DraggableVizCard
-            key={card.id}
-            cardId={card.id}
-            visualization={card.visualization}
-            x={card.x}
-            y={card.y}
-            z={card.z}
-            mapHighlight={
-              isMapVisualization(card.visualization) &&
-              messageOrder(card.messageId) === latestMapOrder &&
-              latestMapOrder > 0
-            }
-            onDrag={handleDrag}
-            onDragStart={handleDragStart}
-            onDismiss={handleDismissCard}
-          />
-        ))}
-      </main>
+      <div className="app-body">
+        <main ref={canvasRef} className="viz-canvas" aria-label="Visualization canvas">
+          <VizCardEdges edges={cardEdges} centers={cardCenters} />
+          {vizCards.map((card) => (
+            <DraggableVizCard
+              key={card.id}
+              cardId={card.id}
+              visualization={card.visualization}
+              x={card.x}
+              y={card.y}
+              z={card.z}
+              mapHighlight={
+                isMapVisualization(card.visualization) &&
+                messageOrder(card.messageId) === latestMapOrder &&
+                latestMapOrder > 0
+              }
+              canvasRef={canvasRef}
+              onCardGeometry={handleCardGeometry}
+              onDrag={handleDrag}
+              onDragStart={handleDragStart}
+              onDismiss={handleDismissCard}
+            />
+          ))}
+        </main>
 
-      <footer className="chat-dock">
-        <div className="chat-dock-inner">
-          <div className="latest-qa" aria-live="polite">
-            {latestUser ? (
-              <div className="msg msg-user latest-qa-user">{latestUser.text}</div>
-            ) : (
-              <p className="dock-hint">Ask a question below. Visualizations appear as movable cards.</p>
-            )}
-            {latestReply ? (
-              latestReply.role === 'error' ? (
-                <div className="msg msg-error latest-qa-answer">{latestReply.text}</div>
-              ) : (
-                <div className="msg msg-assistant latest-qa-answer">
-                  <MarkdownMessage content={latestReply.text} />
+        <aside className="chat-column" aria-label="Chat">
+          <div
+            ref={messagesScrollRef}
+            className="chat-messages-scroll"
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+          >
+            {messages.length === 0 && !loading ? (
+              <p className="dock-hint">
+                Ask a question below. Visualizations appear as movable cards on the canvas.
+              </p>
+            ) : null}
+            {messages.map((m) => {
+              if (m.role === 'user') {
+                return (
+                  <div key={m.id} className="msg msg-user chat-msg chat-msg-user">
+                    {m.text}
+                  </div>
+                )
+              }
+              if (m.role === 'error') {
+                return (
+                  <div key={m.id} className="msg msg-error chat-msg">
+                    {m.text}
+                  </div>
+                )
+              }
+              return (
+                <div key={m.id} className="msg msg-assistant chat-msg">
+                  <MarkdownMessage content={m.text} />
                 </div>
               )
-            ) : null}
+            })}
             {loading ? (
-              <div className="latest-qa-loading" role="status" aria-live="polite">
+              <div className="chat-loading" role="status" aria-live="polite">
                 <span className="spinner spinner--sm" aria-hidden="true" />
                 <span>Calling agent…</span>
               </div>
             ) : null}
           </div>
 
-          <div className="presets" role="toolbar" aria-label="Example queries">
-            {PRESET_QUERIES.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className="preset-chip"
-                onClick={() => applyPreset(p.query)}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
+          <div className="chat-column-footer">
+            <div className="presets" role="toolbar" aria-label="Example queries">
+              {PRESET_QUERIES.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="preset-chip"
+                  onClick={() => applyPreset(p.query)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
 
-          {historyMessages.length > 0 ? (
-            <div className="history-wrap">
-              <button
-                type="button"
-                className="history-toggle"
-                aria-expanded={historyOpen}
-                onClick={() => setHistoryOpen((o) => !o)}
-              >
-                Previous messages
-              </button>
-              {historyOpen ? (
-                <div className="history-popover" role="region" aria-label="Previous messages">
-                  {historyMessages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`history-row history-row--${m.role}`}
-                    >
-                      <span className="history-role">{m.role}</span>
-                      <div className="history-text">
-                        {m.role === 'assistant' ? (
-                          <MarkdownMessage content={m.text} className="markdown-body--compact" />
-                        ) : (
-                          m.text
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <div className="composer" aria-busy={loading}>
+              {sessionId ? (
+                <p className="session-hint" title={sessionId}>
+                  Session: {sessionId.slice(0, 24)}
+                  {sessionId.length > 24 ? '…' : ''}
+                </p>
               ) : null}
-            </div>
-          ) : null}
-
-          <div className="composer" aria-busy={loading}>
-            {sessionId ? (
-              <p className="session-hint" title={sessionId}>
-                Session: {sessionId.slice(0, 24)}
-                {sessionId.length > 24 ? '…' : ''}
-              </p>
-            ) : null}
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="e.g. M4+ earthquakes near Vancouver in the last 7 days"
-              disabled={loading}
-              aria-label="Question"
-              rows={2}
-            />
-            <div className="composer-actions">
-              {loading ? (
-                <span className="loading-inline" role="status">
-                  <span className="spinner spinner--sm" aria-hidden="true" />
-                  <span className="loading-inline-label">Thinking…</span>
-                </span>
-              ) : (
-                <span className="composer-actions-spacer" />
-              )}
-              <button type="button" onClick={() => void send()} disabled={loading || !input.trim()}>
-                Send
-              </button>
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="e.g. M4+ earthquakes near Vancouver in the last 7 days"
+                disabled={loading}
+                aria-label="Question"
+                rows={2}
+              />
+              <div className="composer-actions">
+                {loading ? (
+                  <span className="loading-inline" role="status">
+                    <span className="spinner spinner--sm" aria-hidden="true" />
+                    <span className="loading-inline-label">Thinking…</span>
+                  </span>
+                ) : (
+                  <span className="composer-actions-spacer" />
+                )}
+                <button type="button" onClick={() => void send()} disabled={loading || !input.trim()}>
+                  Send
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </footer>
+        </aside>
+      </div>
     </div>
   )
 }
