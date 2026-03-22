@@ -58,6 +58,28 @@
   overflow: hidden;
 }
 
+@keyframes viz-card-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes viz-card-exit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
 .viz-card-edges {
   position: absolute;
   inset: 0;
@@ -66,15 +88,134 @@
   overflow: visible;
 }
 
-.viz-card-root {
+.viz-card-edges-draft {
+  position: absolute;
+  inset: 0;
+  z-index: 5000;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.viz-card-draggable-shell {
   position: absolute;
   left: 0;
   top: 0;
-  width: min(300px, 55%);
+  width: max-content;
+  height: max-content;
+  max-width: 100%;
+}
+
+.viz-card-root {
+  position: relative;
+  left: 0;
+  top: 0;
+  width: min(420px, 78%);
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface-elevated);
   box-shadow: 0 4px 18px rgba(44, 38, 29, 0.1);
+  transform-origin: center center;
+}
+
+.viz-card-root.viz-card--enter {
+  animation: viz-card-enter 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.viz-card-root.viz-card--exit {
+  animation: viz-card-exit 0.3s cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+.viz-card-port {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  box-shadow: 0 1px 4px rgba(44, 38, 29, 0.15);
+  cursor: crosshair;
+  z-index: 10;
+  touch-action: none;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.viz-card-port:hover {
+  transform: scale(1.15);
+  background: var(--accent-dim);
+  box-shadow: 0 2px 8px rgba(184, 92, 58, 0.35);
+}
+
+.viz-card-port--snap {
+  transform: scale(1.25);
+  background: var(--accent);
+  border-color: var(--heading);
+  box-shadow: 0 0 0 3px rgba(184, 92, 58, 0.35);
+}
+
+.viz-card-port--n {
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+}
+
+.viz-card-port--e {
+  right: 0;
+  top: 50%;
+  transform: translate(50%, -50%);
+}
+
+.viz-card-port--s {
+  left: 50%;
+  bottom: 0;
+  transform: translate(-50%, 50%);
+}
+
+.viz-card-port--w {
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.viz-card-port--n:hover,
+.viz-card-port--n.viz-card-port--snap {
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.viz-card-port--n.viz-card-port--snap {
+  transform: translate(-50%, -50%) scale(1.25);
+}
+
+.viz-card-port--e:hover,
+.viz-card-port--e.viz-card-port--snap {
+  transform: translate(50%, -50%) scale(1.15);
+}
+
+.viz-card-port--e.viz-card-port--snap {
+  transform: translate(50%, -50%) scale(1.25);
+}
+
+.viz-card-port--s:hover,
+.viz-card-port--s.viz-card-port--snap {
+  transform: translate(-50%, 50%) scale(1.15);
+}
+
+.viz-card-port--s.viz-card-port--snap {
+  transform: translate(-50%, 50%) scale(1.25);
+}
+
+.viz-card-port--w:hover,
+.viz-card-port--w.viz-card-port--snap {
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.viz-card-port--w.viz-card-port--snap {
+  transform: translate(-50%, -50%) scale(1.25);
 }
 
 .viz-card-root.viz-card--map-latest {
@@ -141,7 +282,7 @@
 }
 
 .viz-card-body {
-  max-height: 260px;
+  max-height: 280px;
   overflow: auto;
   padding: 0.35rem;
 }
@@ -160,15 +301,15 @@
 }
 
 .viz-card-body .leaflet-wrap {
-  height: 180px;
+  height: 200px;
 }
 
 .viz-card-body .leaflet-wrap--sm {
-  height: 160px;
+  height: 176px;
 }
 
 .viz-card-body .chart-wrap {
-  height: 160px;
+  height: 176px;
 }
 
 .chat-column {
@@ -615,6 +756,6 @@
   }
 
   .viz-card-root {
-    width: min(280px, 88%);
+    width: min(340px, 92%);
   }
 }

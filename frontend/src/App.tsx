@@ -2,7 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { invokeFormatter } from './api'
 import { DraggableVizCard } from './components/DraggableVizCard'
 import { MarkdownMessage } from './components/MarkdownMessage'
-import { VizCardEdges, type CardCenter, type VizEdge } from './components/VizCardEdges'
+import {
+  VizCardEdgeLayers,
+  type CardBounds,
+  type PortSide,
+  type PortRef,
+  type VizEdge,
+  findNearestPort,
+  edgeKey,
+  portPoint,
+} from './components/VizCardEdges'
 import type { Visualization } from './types'
 import { PRESET_QUERIES } from './presetQueries'
 import './App.css'
@@ -23,6 +32,16 @@ interface VizCardModel {
   x: number
   y: number
   z: number
+  exiting?: boolean
+}
+
+interface DraftState {
+  fromCardId: string
+  fromSide: PortSide
+  startX: number
+  startY: number
+  currentX: number
+  currentY: number
 }
 
 let idCounter = 0
@@ -50,17 +69,24 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [vizCards, setVizCards] = useState<VizCardModel[]>([])
   const [cardEdges, setCardEdges] = useState<VizEdge[]>([])
-  const [cardCenters, setCardCenters] = useState<Record<string, CardCenter>>({})
+  const [cardBounds, setCardBounds] = useState<Record<string, CardBounds>>({})
+  const [draft, setDraft] = useState<DraftState | null>(null)
+  const [snapHighlight, setSnapHighlight] = useState<PortRef | null>(null)
   const [input, setInput] = useState('')
   const [sessionId, setSessionId] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState(false)
   const maxZRef = useRef(1)
   const canvasRef = useRef<HTMLElement>(null)
   const messagesScrollRef = useRef<HTMLDivElement>(null)
+  const cardBoundsRef = useRef(cardBounds)
+
+  useEffect(() => {
+    cardBoundsRef.current = cardBounds
+  }, [cardBounds])
 
   const latestMapOrder = useMemo(() => {
     const orders = vizCards
-      .filter((c) => isMapVisualization(c.visualization))
+      .filter((c) => !c.exiting && isMapVisualization(c.visualization))
       .map((c) => messageOrder(c.messageId))
     return orders.length ? Math.max(...orders) : 0
   }, [vizCards])
@@ -71,13 +97,107 @@ export default function App() {
     el.scrollTop = el.scrollHeight
   }, [messages, loading])
 
-  const handleCardGeometry = useCallback((id: string, center: CardCenter) => {
-    setCardCenters((prev) => {
+  const clientToCanvas = useCallback((clientX: number, clientY: number) => {
+    const c = canvasRef.current
+    if (!c) return { x: 0, y: 0 }
+    const r = c.getBoundingClientRect()
+    return { x: clientX - r.left, y: clientY - r.top }
+  }, [])
+
+  useEffect(() => {
+    if (!draft) return
+
+    const fromCardId = draft.fromCardId
+
+    const onMove = (e: PointerEvent) => {
+      const { x, y } = clientToCanvas(e.clientX, e.clientY)
+      setDraft((d) => (d ? { ...d, currentX: x, currentY: y } : null))
+      const near = findNearestPort(x, y, cardBoundsRef.current, {
+        ignoreCardId: fromCardId,
+      })
+      setSnapHighlight(near)
+    }
+
+    let finished = false
+    const finish = (e: PointerEvent) => {
+      if (finished) return
+      finished = true
+      const { x, y } = clientToCanvas(e.clientX, e.clientY)
+      const target = findNearestPort(x, y, cardBoundsRef.current, {
+        ignoreCardId: fromCardId,
+      })
+
+      setDraft((currentDraft) => {
+        if (
+          currentDraft &&
+          target &&
+          target.cardId !== currentDraft.fromCardId
+        ) {
+          const newEdge: VizEdge = {
+            id: nextEdgeId(),
+            fromCardId: currentDraft.fromCardId,
+            fromSide: currentDraft.fromSide,
+            toCardId: target.cardId,
+            toSide: target.side,
+          }
+          setCardEdges((prev) => {
+            const k = edgeKey(newEdge)
+            if (prev.some((ed) => edgeKey(ed) === k)) return prev
+            return [...prev, newEdge]
+          })
+        }
+        return null
+      })
+      setSnapHighlight(null)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', finish)
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', finish)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', finish)
+    }
+  }, [draft, clientToCanvas])
+
+  const handleCardBounds = useCallback((id: string, b: CardBounds) => {
+    setCardBounds((prev) => {
       const p = prev[id]
-      if (p && p.x === center.x && p.y === center.y) return prev
-      return { ...prev, [id]: center }
+      if (
+        p &&
+        p.left === b.left &&
+        p.top === b.top &&
+        p.width === b.width &&
+        p.height === b.height
+      ) {
+        return prev
+      }
+      return { ...prev, [id]: b }
     })
   }, [])
+
+  const handlePortPointerDown = useCallback(
+    (cardId: string, side: PortSide, ev: React.PointerEvent) => {
+      if (!ev.isPrimary) return
+      const b = cardBoundsRef.current[cardId]
+      if (!b) return
+      const p = portPoint(b, side)
+      setDraft({
+        fromCardId: cardId,
+        fromSide: side,
+        startX: p.x,
+        startY: p.y,
+        currentX: p.x,
+        currentY: p.y,
+      })
+      setSnapHighlight(null)
+    },
+    [],
+  )
 
   const handleDrag = useCallback((id: string, x: number, y: number) => {
     setVizCards((prev) => prev.map((c) => (c.id === id ? { ...c, x, y } : c)))
@@ -90,9 +210,17 @@ export default function App() {
   }, [])
 
   const handleDismissCard = useCallback((id: string) => {
+    setVizCards((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, exiting: true } : c)),
+    )
+  }, [])
+
+  const handleExitAnimationEnd = useCallback((id: string) => {
     setVizCards((prev) => prev.filter((c) => c.id !== id))
-    setCardEdges((prev) => prev.filter((e) => e.from !== id && e.to !== id))
-    setCardCenters((prev) => {
+    setCardEdges((prev) =>
+      prev.filter((e) => e.fromCardId !== id && e.toCardId !== id),
+    )
+    setCardBounds((prev) => {
       if (!(id in prev)) return prev
       const next = { ...prev }
       delete next[id]
@@ -123,26 +251,16 @@ export default function App() {
         },
       ])
       if (res.visualization.type !== 'none') {
-        const newCardId = `v-${asstId}`
         setVizCards((prev) => {
           const n = prev.length
           maxZRef.current += 1
           const newCard: VizCardModel = {
-            id: newCardId,
+            id: `v-${asstId}`,
             messageId: asstId,
             visualization: res.visualization,
             x: 40 + (n % 8) * 26,
             y: 48 + (n % 5) * 24,
             z: maxZRef.current,
-          }
-          if (prev.length > 0) {
-            const from = prev[prev.length - 1].id
-            queueMicrotask(() =>
-              setCardEdges((edges) => [
-                ...edges,
-                { id: nextEdgeId(), from, to: newCardId },
-              ]),
-            )
           }
           return [...prev, newCard]
         })
@@ -166,6 +284,16 @@ export default function App() {
     setInput(query)
   }
 
+  const draftLine = draft
+    ? {
+        x1: draft.startX,
+        y1: draft.startY,
+        side: draft.fromSide,
+        x2: draft.currentX,
+        y2: draft.currentY,
+      }
+    : null
+
   return (
     <div className="app">
       <header className="app-header">
@@ -177,7 +305,7 @@ export default function App() {
 
       <div className="app-body">
         <main ref={canvasRef} className="viz-canvas" aria-label="Visualization canvas">
-          <VizCardEdges edges={cardEdges} centers={cardCenters} />
+          <VizCardEdgeLayers edges={cardEdges} bounds={cardBounds} draftLine={draftLine} />
           {vizCards.map((card) => (
             <DraggableVizCard
               key={card.id}
@@ -186,16 +314,21 @@ export default function App() {
               x={card.x}
               y={card.y}
               z={card.z}
+              exiting={Boolean(card.exiting)}
+              snapTarget={snapHighlight}
               mapHighlight={
+                !card.exiting &&
                 isMapVisualization(card.visualization) &&
                 messageOrder(card.messageId) === latestMapOrder &&
                 latestMapOrder > 0
               }
               canvasRef={canvasRef}
-              onCardGeometry={handleCardGeometry}
+              onCardBounds={handleCardBounds}
+              onPortPointerDown={(side, ev) => handlePortPointerDown(card.id, side, ev)}
               onDrag={handleDrag}
               onDragStart={handleDragStart}
               onDismiss={handleDismissCard}
+              onExitAnimationEnd={handleExitAnimationEnd}
             />
           ))}
         </main>
@@ -210,7 +343,8 @@ export default function App() {
           >
             {messages.length === 0 && !loading ? (
               <p className="dock-hint">
-                Ask a question below. Visualizations appear as movable cards on the canvas.
+                Ask a question below. Visualizations appear as movable cards on the canvas. Drag from
+                the dots on card edges to link cards.
               </p>
             ) : null}
             {messages.map((m) => {
