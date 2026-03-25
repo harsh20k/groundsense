@@ -12,3 +12,8 @@ output "formatter_function_url" {
   description = "Response formatter Lambda function URL"
   value       = aws_lambda_function_url.response_formatter.function_url
 }
+
+output "agent_observability_dashboard_name" {
+  description = "CloudWatch dashboard for agent + tool Lambda metrics and custom turn metrics"
+  value       = aws_cloudwatch_dashboard.agent_observability.dashboard_name
+}

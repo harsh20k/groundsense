@@ -27,8 +27,10 @@ resource "aws_lambda_function" "response_formatter" {
 
   environment {
     variables = {
-      AGENT_ID       = var.agent_id
-      AGENT_ALIAS_ID = var.agent_alias_id
+      AGENT_ID          = var.agent_id
+      AGENT_ALIAS_ID    = var.agent_alias_id
+      METRICS_NAMESPACE = var.metrics_namespace
+      ENVIRONMENT       = var.environment
     }
   }
 
@@ -100,6 +102,30 @@ resource "aws_iam_role_policy" "response_formatter_bedrock" {
           var.agent_arn,
           local.agent_alias_arn,
         ]
+      }
+    ]
+  })
+}
+
+# Custom metrics (agent turn duration, tool count, success/failure)
+resource "aws_iam_role_policy" "response_formatter_cloudwatch_metrics" {
+  name = "${var.project_name}-${var.environment}-response-formatter-cw-metrics"
+  role = aws_iam_role.response_formatter.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = var.metrics_namespace
+          }
+        }
       }
     ]
   })

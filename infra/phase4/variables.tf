@@ -31,3 +31,9 @@ variable "agent_arn" {
   description = "Bedrock Agent ARN"
   type        = string
 }
+
+variable "metrics_namespace" {
+  description = "CloudWatch custom metric namespace for response_formatter observability"
+  type        = string
+  default     = "GroundSense"
+}
