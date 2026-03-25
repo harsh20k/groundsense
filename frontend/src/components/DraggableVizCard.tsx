@@ -1,11 +1,38 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import Draggable from 'react-draggable'
-import type { RefObject } from 'react'
+import type { CSSProperties, RefObject } from 'react'
 import type { Visualization } from '../types'
 import { VisualizationRouter } from './VisualizationRouter'
 import type { CardBounds, PortSide, PortRef } from './VizCardEdges'
 
 const PORT_SIDES: PortSide[] = ['n', 'e', 's', 'w']
+
+/** Min/max card size (px) when resizing. */
+const CARD_MIN_W = 260
+const CARD_MIN_H = 180
+const CARD_MAX_W = 920
+const CARD_MAX_H = 720
+const CANVAS_EDGE_MARGIN = 8
+
+function clampCardSize(
+  w: number,
+  h: number,
+  canvas: DOMRect | null,
+  cardX: number,
+  cardY: number,
+): { w: number; h: number } {
+  let nw = Math.min(CARD_MAX_W, Math.max(CARD_MIN_W, w))
+  let nh = Math.min(CARD_MAX_H, Math.max(CARD_MIN_H, h))
+  if (canvas) {
+    const maxByCanvasW = canvas.width - cardX - CANVAS_EDGE_MARGIN
+    const maxByCanvasH = canvas.height - cardY - CANVAS_EDGE_MARGIN
+    if (maxByCanvasW >= CARD_MIN_W) nw = Math.min(nw, maxByCanvasW)
+    if (maxByCanvasH >= CARD_MIN_H) nh = Math.min(nh, maxByCanvasH)
+    nw = Math.max(CARD_MIN_W, nw)
+    nh = Math.max(CARD_MIN_H, nh)
+  }
+  return { w: nw, h: nh }
+}
 
 interface Props {
   cardId: string
@@ -13,6 +40,8 @@ interface Props {
   x: number
   y: number
   z: number
+  cardWidth?: number
+  cardHeight?: number
   mapHighlight: boolean
   exiting: boolean
   snapTarget: PortRef | null
@@ -21,6 +50,7 @@ interface Props {
   onPortPointerDown: (side: PortSide, ev: React.PointerEvent) => void
   onDrag: (id: string, x: number, y: number) => void
   onDragStart: (id: string) => void
+  onResize: (id: string, width: number, height: number) => void
   onDismiss: (id: string) => void
   onExitAnimationEnd: (id: string) => void
 }
@@ -64,6 +94,8 @@ export function DraggableVizCard({
   x,
   y,
   z,
+  cardWidth,
+  cardHeight,
   mapHighlight,
   exiting,
   snapTarget,
@@ -72,12 +104,15 @@ export function DraggableVizCard({
   onPortPointerDown,
   onDrag,
   onDragStart,
+  onResize,
   onDismiss,
   onExitAnimationEnd,
 }: Props) {
   const title = vizTitle(visualization)
   const shellRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
+  const hasExplicitSize =
+    typeof cardWidth === 'number' && typeof cardHeight === 'number'
 
   const reportGeometry = useCallback(() => {
     if (!onCardBounds) return
@@ -96,7 +131,70 @@ export function DraggableVizCard({
 
   useLayoutEffect(() => {
     reportGeometry()
-  }, [x, y, visualization, exiting, reportGeometry])
+  }, [x, y, cardWidth, cardHeight, visualization, exiting, reportGeometry])
+
+  const onResizePointerDown = useCallback(
+    (ev: React.PointerEvent) => {
+      if (!ev.isPrimary || exiting) return
+      ev.preventDefault()
+      ev.stopPropagation()
+      onDragStart(cardId)
+      const shell = shellRef.current
+      const canvasEl = canvasRef.current
+      if (!shell || !canvasEl) return
+      const target = ev.currentTarget
+      target.setPointerCapture(ev.pointerId)
+
+      const cr = canvasEl.getBoundingClientRect()
+      const sr = shell.getBoundingClientRect()
+      const startW = cardWidth ?? sr.width
+      const startH = cardHeight ?? sr.height
+      const startClientX = ev.clientX
+      const startClientY = ev.clientY
+      const pointerId = ev.pointerId
+
+      const onMove = (e: PointerEvent) => {
+        if (e.pointerId !== pointerId) return
+        const dw = e.clientX - startClientX
+        const dh = e.clientY - startClientY
+        const { w, h } = clampCardSize(
+          startW + dw,
+          startH + dh,
+          cr,
+          x,
+          y,
+        )
+        onResize(cardId, w, h)
+      }
+      const onUp = (e: PointerEvent) => {
+        if (e.pointerId !== pointerId) return
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+        try {
+          target.releasePointerCapture(pointerId)
+        } catch {
+          /* already released */
+        }
+        reportGeometry()
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
+    },
+    [
+      cardId,
+      cardHeight,
+      cardWidth,
+      canvasRef,
+      exiting,
+      onDragStart,
+      onResize,
+      reportGeometry,
+      x,
+      y,
+    ],
+  )
 
   useLayoutEffect(() => {
     const inner = innerRef.current
@@ -119,11 +217,30 @@ export function DraggableVizCard({
 
   const rootClass = [
     'viz-card-root',
+    hasExplicitSize ? 'viz-card-root--sized' : '',
     mapHighlight ? 'viz-card--map-latest' : '',
     exiting ? 'viz-card--exit' : 'viz-card--enter',
   ]
     .filter(Boolean)
     .join(' ')
+
+  const shellClass = [
+    'viz-card-draggable-shell',
+    hasExplicitSize ? 'viz-card-shell--sized' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  const shellStyle: CSSProperties = {
+    zIndex: z,
+    ...(hasExplicitSize
+      ? {
+          width: cardWidth,
+          height: cardHeight,
+          maxWidth: '100%',
+        }
+      : {}),
+  }
 
   return (
     <Draggable
@@ -131,7 +248,7 @@ export function DraggableVizCard({
       handle=".viz-card-drag-handle"
       position={{ x, y }}
       bounds="parent"
-      cancel=".viz-card-port"
+      cancel=".viz-card-port, .viz-card-resize-handle"
       onStart={() => onDragStart(cardId)}
       onDrag={(_, data) => onDrag(cardId, data.x, data.y)}
       onStop={(_, data) => {
@@ -139,7 +256,7 @@ export function DraggableVizCard({
         reportGeometry()
       }}
     >
-      <div ref={shellRef} className="viz-card-draggable-shell" style={{ zIndex: z }}>
+      <div ref={shellRef} className={shellClass} style={shellStyle}>
         <div
           ref={innerRef}
           data-viz-card-id={cardId}
@@ -181,6 +298,29 @@ export function DraggableVizCard({
           <div className="viz-card-body">
             <VisualizationRouter visualization={visualization} />
           </div>
+          <button
+            type="button"
+            className="viz-card-resize-handle"
+            aria-label="Resize visualization"
+            title="Drag to resize"
+            onPointerDown={onResizePointerDown}
+          >
+            <svg
+              className="viz-card-resize-icon"
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              aria-hidden="true"
+            >
+              <path
+                d="M14 14H10M14 14V10M14 14L9 9M14 6v-4M10 2H6M6 6L2 2"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
         </div>
       </div>
     </Draggable>

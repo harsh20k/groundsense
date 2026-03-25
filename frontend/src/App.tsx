@@ -32,6 +32,9 @@ interface VizCardModel {
   x: number
   y: number
   z: number
+  /** User-resized size (px). Omitted = default CSS sizing on the shell. */
+  width?: number
+  height?: number
   exiting?: boolean
 }
 
@@ -209,6 +212,12 @@ export default function App() {
     setVizCards((prev) => prev.map((c) => (c.id === id ? { ...c, z } : c)))
   }, [])
 
+  const handleResizeCard = useCallback((id: string, width: number, height: number) => {
+    setVizCards((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, width, height } : c)),
+    )
+  }, [])
+
   const handleDismissCard = useCallback((id: string) => {
     setVizCards((prev) =>
       prev.map((c) => (c.id === id ? { ...c, exiting: true } : c)),
@@ -314,6 +323,8 @@ export default function App() {
               x={card.x}
               y={card.y}
               z={card.z}
+              cardWidth={card.width}
+              cardHeight={card.height}
               exiting={Boolean(card.exiting)}
               snapTarget={snapHighlight}
               mapHighlight={
@@ -327,6 +338,7 @@ export default function App() {
               onPortPointerDown={(side, ev) => handlePortPointerDown(card.id, side, ev)}
               onDrag={handleDrag}
               onDragStart={handleDragStart}
+              onResize={handleResizeCard}
               onDismiss={handleDismissCard}
               onExitAnimationEnd={handleExitAnimationEnd}
             />

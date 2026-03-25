@@ -24,13 +24,17 @@ Output:
 
 import json
 import os
+import time
 import boto3
 from datetime import datetime
 
 bedrock_agent_runtime = boto3.client('bedrock-agent-runtime')
+cloudwatch = boto3.client('cloudwatch')
 
 AGENT_ID = os.environ.get('AGENT_ID')
 AGENT_ALIAS_ID = os.environ.get('AGENT_ALIAS_ID')
+METRICS_NAMESPACE = os.environ.get('METRICS_NAMESPACE', 'GroundSense')
+ENVIRONMENT = os.environ.get('ENVIRONMENT', 'dev')
 
 CORS_HEADERS = {
     'Content-Type': 'application/json',
@@ -60,15 +64,90 @@ def _parse_request_body(event):
     return event
 
 
+def _metric_dimensions():
+    return [{'Name': 'Environment', 'Value': ENVIRONMENT}]
+
+
+def _emit_turn_metrics(agent_turn_ms, tool_count, success):
+    """Publish per-turn custom metrics (best-effort; never raises)."""
+    dims = _metric_dimensions()
+    data = [
+        {
+            'MetricName': 'AgentTurnDurationMs',
+            'Value': float(agent_turn_ms),
+            'Unit': 'Milliseconds',
+            'Dimensions': dims,
+        },
+    ]
+    if success:
+        data.append({
+            'MetricName': 'ToolCallsPerTurn',
+            'Value': float(tool_count),
+            'Unit': 'Count',
+            'Dimensions': dims,
+        })
+        data.append({
+            'MetricName': 'AgentTurnSuccess',
+            'Value': 1.0,
+            'Unit': 'Count',
+            'Dimensions': dims,
+        })
+    else:
+        data.append({
+            'MetricName': 'AgentTurnFailure',
+            'Value': 1.0,
+            'Unit': 'Count',
+            'Dimensions': dims,
+        })
+    try:
+        cloudwatch.put_metric_data(Namespace=METRICS_NAMESPACE, MetricData=data)
+    except Exception as ex:
+        print(json.dumps({
+            'message_type': 'metrics_emit_failed',
+            'error': str(ex),
+        }))
+
+
+def _log_agent_turn_summary(
+    *,
+    session_id,
+    success,
+    duration_ms,
+    tool_count=0,
+    visualization_type=None,
+    error=None,
+    agent_invoke_attempted=False,
+):
+    """Single-line JSON for CloudWatch Logs Insights."""
+    print(json.dumps({
+        'message_type': 'agent_turn_summary',
+        'session_id': session_id,
+        'success': success,
+        'duration_ms': round(duration_ms, 2),
+        'tool_count': tool_count,
+        'visualization_type': visualization_type,
+        'error': error,
+        'agent_invoke_attempted': agent_invoke_attempted,
+        'environment': ENVIRONMENT,
+    }, default=str))
+
+
 def lambda_handler(event, context):
     """Main Lambda handler."""
     print(f"Received event: {json.dumps(event)}")
-    
+    handler_start = time.perf_counter()
+
     body = _parse_request_body(event)
     query = body.get('query', '').strip()
     session_id = body.get('session_id', f"session-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}")
     
     if not query:
+        _log_agent_turn_summary(
+            session_id=session_id,
+            success=False,
+            duration_ms=(time.perf_counter() - handler_start) * 1000,
+            error='Query parameter is required',
+        )
         return {
             'statusCode': 400,
             'headers': CORS_HEADERS,
@@ -76,6 +155,12 @@ def lambda_handler(event, context):
         }
 
     if not AGENT_ID or not AGENT_ALIAS_ID:
+        _log_agent_turn_summary(
+            session_id=session_id,
+            success=False,
+            duration_ms=(time.perf_counter() - handler_start) * 1000,
+            error='Agent configuration missing',
+        )
         return {
             'statusCode': 500,
             'headers': CORS_HEADERS,
@@ -83,6 +168,7 @@ def lambda_handler(event, context):
         }
     
     try:
+        agent_turn_start = time.perf_counter()
         # Invoke agent with trace enabled
         response = bedrock_agent_runtime.invoke_agent(
             agentId=AGENT_ID,
@@ -158,9 +244,21 @@ def lambda_handler(event, context):
             'session_id': session_id,
             'visualization': visualization
         }
-        
+
+        agent_turn_ms = (time.perf_counter() - agent_turn_start) * 1000
+        tool_count = len(tool_calls)
+        _log_agent_turn_summary(
+            session_id=session_id,
+            success=True,
+            duration_ms=agent_turn_ms,
+            tool_count=tool_count,
+            visualization_type=visualization.get('type'),
+            agent_invoke_attempted=True,
+        )
+        _emit_turn_metrics(agent_turn_ms, tool_count, success=True)
+
         print(f"Response: {len(message)} chars, visualization type: {visualization['type']}")
-        
+
         return {
             'statusCode': 200,
             'headers': CORS_HEADERS,
@@ -172,7 +270,18 @@ def lambda_handler(event, context):
         print(f"ERROR: {error_msg}")
         import traceback
         traceback.print_exc()
-        
+
+        agent_turn_ms = (time.perf_counter() - agent_turn_start) * 1000
+        _log_agent_turn_summary(
+            session_id=session_id,
+            success=False,
+            duration_ms=agent_turn_ms,
+            tool_count=0,
+            error=error_msg,
+            agent_invoke_attempted=True,
+        )
+        _emit_turn_metrics(agent_turn_ms, 0, success=False)
+
         return {
             'statusCode': 500,
             'headers': CORS_HEADERS,
