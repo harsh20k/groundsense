@@ -96,11 +96,12 @@
   overflow: visible;
 }
 
+/* Width lives on the shell so % is not cyclic: 100% resolves to .viz-canvas (abs. positioning CB). */
 .viz-card-draggable-shell {
   position: absolute;
   left: 0;
   top: 0;
-  width: max-content;
+  width: min(520px, 100%);
   height: max-content;
   max-width: 100%;
 }
@@ -109,7 +110,7 @@
   position: relative;
   left: 0;
   top: 0;
-  width: min(420px, 78%);
+  width: 100%;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface-elevated);
@@ -300,16 +301,27 @@
   margin-bottom: 0.4rem;
 }
 
+/* Width-driven height so maps/charts scale with the wider card. */
 .viz-card-body .leaflet-wrap {
-  height: 200px;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  min-height: 200px;
+  height: auto;
 }
 
 .viz-card-body .leaflet-wrap--sm {
-  height: 176px;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  min-height: 168px;
+  height: auto;
 }
 
 .viz-card-body .chart-wrap {
-  height: 176px;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  min-height: 168px;
+  height: auto;
 }
 
 .chat-column {
@@ -755,7 +767,7 @@
     border-top: 1px solid var(--border);
   }
 
-  .viz-card-root {
-    width: min(340px, 92%);
+  .viz-card-draggable-shell {
+    width: min(380px, 100%);
   }
 }

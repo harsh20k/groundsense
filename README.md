@@ -1,125 +1,137 @@
 # GroundSense
 
-An agentic AI application on AWS that answers natural language questions about earthquakes using real-time seismic (API) data, historical RAG retrieval (pdf documents), and dynamic map/chart visualizations.
+AWS-native generative AI application: an Amazon Bedrock Agent with LLM tool use and retrieval-augmented generation (RAG) answers natural-language questions about earthquakes—live seismic APIs, DynamoDB and S3 data, PDF knowledge bases, and data visualization (maps and charts). Serverless architecture with Terraform (infrastructure as code), Python on AWS Lambda, API Gateway, EventBridge, CloudFront and S3 for the static site, and a React single-page app.
 
-## What It Does
+## What it does
 
 Ask questions like:
+
 - *"How many M4.0+ earthquakes hit Nova Scotia last year?"*
 - *"Is today's Vancouver activity unusual?"*
 - *"Should Halifax worry about tsunamis from Grand Banks earthquakes?"*
 
-The AI agent autonomously decides which tools to use, fetches real-time and historical data, and responds with answers plus relevant charts and maps.
+The agent chooses tools, pulls live and historical data, and answers with text plus maps and charts when useful.
 
 ## Architecture
 
-- **Frontend**: Single-page web app (S3 + CloudFront) — see [deploy/phase_5.md](deploy/phase_5.md)
-- **Backend**: API Gateway → Lambda (response formatter) → Bedrock Agent
-- **Data Pipeline**: EventBridge Scheduler for ingestors, S3 event notifications for fanout
-- **Storage**: DynamoDB (recent data), S3 (historical archive), Bedrock Knowledge Base (RAG for narrative documents)
-- **Alerts**: S3-triggered Lambda → SNS notifications for M5.0+ events
+- **Web UI**: React SPA on **S3 + CloudFront** — setup in [deploy/phase_5.md](deploy/phase_5.md)
+- **API**: **API Gateway** → **Lambda** (response formatter) → **Amazon Bedrock Agent**
+- **Ingestion**: **EventBridge Scheduler** runs pollers; **S3** events fan out to downstream Lambdas
+- **Storage**: **DynamoDB** (recent events, TTL), **S3** (archive + documents), **Bedrock Knowledge Base** (RAG over narrative PDFs)
+- **Alerts**: Lambda on S3 writes → **SNS** for significant events
 
-## Data Sources
+## Data sources
 
-All free, no API keys required:
-- NRCan FDSN Event API (Canadian seismic data, 1985-present)
-- USGS FDSN Event API (global historical data)
-- USGS Real-Time Feed (updates every minute)
-- Open-Meteo (weather context)
+All free; no API keys required:
 
-## Key Features
+- NRCan FDSN Event API (Canada, 1985–present)
+- USGS FDSN Event API (global history)
+- USGS real-time feed (~minute cadence upstream)
+- Open-Meteo (weather at epicenters)
 
-- Multi-turn conversations with session memory
-- Autonomous tool selection and reasoning
-- Dynamic visualizations (maps and charts)
-- RAG-based historical context
-- Guardrails to block earthquake prediction requests
-- Proactive alerts for significant events
+## Features
 
-## Phase 1: Data Pipeline (Implemented)
+- Multi-turn chat with session memory
+- Tool use for earthquakes, history, hazards, location context, weather
+- Maps and charts in the UI
+- RAG over uploaded bulletins and reports
+- Bedrock guardrails (e.g. blocking earthquake *prediction* requests)
+- Optional email alerts via SNS
 
-✅ **Architecture**: Version 4 (Simplest/Cheapest - Direct Invocation)
+## System components
 
-### Components
+### Data pipeline and analytics
 
-1. **Ingestors** (Lambda + EventBridge Scheduler):
-   - `seismic_poller`: Fetches NRCan + USGS data every minute → writes to DynamoDB + S3
-   - `document_fetcher`: Fetches GSC PDFs daily → writes to S3
+Terraform entrypoint: **`infra/`** (root). Design goal: **low cost** — Lambdas invoked directly (no Kinesis).
 
-2. **Storage**:
-   - DynamoDB: Recent earthquakes (30-day TTL)
-   - S3 `seismic-archive`: Historical data lake (partitioned by date)
-   - S3 `documents`: PDF reports and bulletins
+| Piece | Role |
+|--------|------|
+| **`seismic_poller`** | NRCan + USGS → DynamoDB + S3 archive; schedule **`rate(5 minutes)`** (`infra/modules/ingestors/main.tf`) |
+| **`document_fetcher`** | GSC PDFs → `documents` bucket; daily **02:00 UTC** (`cron(0 2 * * ? *)`) |
+| **DynamoDB** | Recent quakes; default **30-day TTL** (configurable) |
+| **S3** | `seismic-archive` (date-partitioned lake), `documents` (PDFs) |
+| **`alert`** | On new objects under the alert path, read metadata and publish to **SNS** (set `alert_email` in `terraform.tfvars`) |
+| **`kb_sync`** | On new docs in S3, starts a **Knowledge Base ingestion job** when `knowledge_base_id` and `data_source_id` are set |
+| **Glue + Athena** | Crawler on the archive; SQL in Athena for historical analysis |
 
-3. **Triggers** (S3 event notifications):
-   - `alert` Lambda: M5.0+ events → SNS topic (Phase 6 stub)
-   - `kb_sync` Lambda: New documents → Bedrock KB sync (Phase 2 stub)
+Rough **data-only** AWS bill for light use: on the order of **$0.10–0.50/month** (mostly Lambda, storage, and ad hoc Athena; scheduler and S3 notifications are negligible).
 
-4. **Analytics**:
-   - Glue Crawler: Catalogs S3 data lake
-   - Athena: SQL queries over historical data
+### Knowledge Base (RAG)
 
-### Cost Estimate
-~$0.10–0.50/month (EventBridge Scheduler is free, S3 notifications are free, only pay for Lambda execution + storage)
+Terraform: **`infra/phase2`**. Bedrock Knowledge Base (e.g. OpenSearch Serverless-backed). Walkthrough: [deploy/phase_2.md](deploy/phase_2.md).
+
+### Agent, guardrails, and tools
+
+Terraform: **`infra/phase3`**.
+
+- **Model** (default in Terraform): `us.anthropic.claude-sonnet-4-20250514-v1:0`
+- **Guardrails**: topic policies for predictions and similar abuse (`infra/phase3/modules/bedrock_agent`)
+- **Tool Lambdas** (`lambda/tools/`): `get_recent_earthquakes`, `analyze_historical_patterns`, `get_hazard_assessment`, `get_location_context`, `fetch_weather_at_epicenter`
+
+Agent setup: [deploy/phase_3.md](deploy/phase_3.md). Example environment checklist and tool checks: [deploy/PHASE_3_STATUS.md](deploy/PHASE_3_STATUS.md).
+
+### Response formatter
+
+Lambda that shapes agent output for the frontend. Terraform: **`infra/phase4`**. [deploy/phase_4.md](deploy/phase_4.md).
+
+### Web app and public API
+
+API Gateway in front of the formatter; static site for the UI. Terraform: **`infra/phase5`**. [deploy/phase_5.md](deploy/phase_5.md). Source: **`frontend/`** (Vite + React).
 
 ## Deployment
 
 ### Prerequisites
-- AWS CLI configured
-- Terraform >= 1.5
-- Python 3.11
 
-### Deploy Infrastructure
+- AWS CLI configured
+- Terraform ≥ 1.5
+- Python **3.11+** (ingestors and formatter target 3.11; agent tool Lambdas in **`infra/phase3`** use **3.12** in Terraform)
+
+### Terraform directories (apply in order)
+
+Each folder has `terraform.tfvars.example`; use the previous stack’s outputs for the next. Guides under **`deploy/`** match these paths.
+
+- **`infra/`** — storage, ingestors, triggers, analytics  
+- **`infra/phase2`** — Knowledge Base  
+- **`infra/phase3`** — Bedrock agent + tool Lambdas  
+- **`infra/phase4`** — response formatter  
+- **`infra/phase5`** — API Gateway + UI hosting  
+
+### Bootstrap the core stack
 
 ```bash
 cd infra
-
-# Copy and customize variables
 cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your settings
+# Edit: alert_email; optional knowledge_base_id / data_source_id for kb_sync
 
-# Initialize Terraform
 terraform init
-
-# Deploy
 terraform apply
 ```
 
-### Phase 5: Web UI + API Gateway
-
-After Phase 3–4 (Bedrock agent + response formatter Lambda), deploy the hosted chat UI and API Gateway front end:
-
-- Terraform: `infra/phase5` — see **[deploy/phase_5.md](deploy/phase_5.md)**
-- App source: `frontend/` (Vite + React)
+After the root stack, follow the **`deploy/`** guides linked above for each additional `infra/` subfolder you apply.
 
 ### Outputs
 
-After deployment, Terraform will output:
-- DynamoDB table name
-- S3 bucket names
-- Lambda function names
-- SNS topic ARN
-- Glue database and Athena workgroup names
+Run `terraform output` in each directory you applied. The root stack exposes table names, buckets, Lambda names, SNS ARN, Glue DB, and Athena workgroup. Later stacks add invoke URLs, CloudFront domain, etc.
 
-### Testing
+## Testing
 
-#### Manual Lambda Invocation
+### Invoke Lambdas
 
 ```bash
-# Test seismic poller
 aws lambda invoke \
   --function-name groundsense-dev-seismic-poller \
   --payload '{}' \
   response.json
 
-# Test document fetcher
 aws lambda invoke \
   --function-name groundsense-dev-document-fetcher \
   --payload '{}' \
   response.json
 ```
 
-#### Query Recent Earthquakes (DynamoDB)
+(Replace `groundsense-dev` if you changed `project_name` / `environment`.)
+
+### DynamoDB (recent events)
 
 ```bash
 aws dynamodb scan \
@@ -127,54 +139,47 @@ aws dynamodb scan \
   --max-items 10
 ```
 
-#### Query Historical Data (Athena)
+### Athena (archive)
 
-1. Navigate to Athena console
-2. Select workgroup: `groundsense-dev-seismic-analysis`
-3. Run query:
+1. Athena console → workgroup **`groundsense-dev-seismic-analysis`** (or your configured name).
+2. Query with partition values that exist in your lake:
 
 ```sql
-SELECT * 
+SELECT *
 FROM groundsense_dev_seismic_data.data
-WHERE year = 2026 
+WHERE year = '2026'
 LIMIT 10;
 ```
 
-## Next Steps
+## Further reading
 
-### Phase 2: Knowledge Base (RAG Setup)
-- Create Bedrock Knowledge Base + OpenSearch Serverless
-- Wire up `kb_sync` Lambda to start ingestion jobs
-- Test retrieval quality
+- Extended product roadmap and alternatives: [notes/Build Plan.md](notes/Build%20Plan.md)
+- Deployment walkthroughs: **`deploy/`** (step-by-step guides and environment status notes)
+- Design and session notes: **`notes/`** (e.g. `progress/`)
 
-### Phase 3: Agent & Tools
-- Implement 5 Lambda tools for the agent
-- Configure Bedrock Agent with Claude 3.5 Sonnet
-- Add Guardrails
-
-### Phase 4-7
-See [Build Plan](notes/Build%20Plan.md) for full roadmap
-
-## Project Structure
+## Repository layout
 
 ```
 groundsense/
-├── infra/                    # Terraform (phases: root, phase2–5)
-│   ├── modules/              # Shared modules (storage, ingestors, …)
-│   ├── phase4/               # Response formatter Lambda (+ optional Function URL)
-│   ├── phase5/               # API Gateway + S3 + CloudFront (web UI hosting)
-│   └── …
-├── frontend/                 # Phase 5 SPA (Vite + React)
-├── lambda/                   # Lambda function source code
+├── infra/
+│   ├── modules/          # storage, ingestors, triggers, analytics, IAM
+│   ├── main.tf           # root stack (pipeline + storage + triggers)
+│   ├── phase2/           # Knowledge Base
+│   ├── phase3/           # Bedrock agent + tool Lambdas
+│   ├── phase4/           # response formatter
+│   └── phase5/           # API Gateway + S3 + CloudFront
+├── frontend/             # Vite + React SPA
+├── lambda/
+│   ├── alert/
+│   ├── document_fetcher/
+│   ├── kb_sync/
 │   ├── response_formatter/
 │   ├── seismic_poller/
-│   └── …
-├── deploy/                   # Phase deployment guides (phase_4.md, phase_5.md, …)
-└── notes/
+│   └── tools/            # five agent tools
+├── deploy/               # step-by-step AWS guides
+└── notes/                # plans, architecture, progress
 ```
 
 ## License
 
 MIT
-
----
