@@ -15,7 +15,7 @@ resource "aws_bedrock_guardrail" "earthquake_safety" {
     topics_config {
       name       = "Earthquake Predictions"
       definition = "Requests to predict or forecast FUTURE earthquakes, including when or where they will occur. Does NOT include historical data, recent records, or past seismic activity."
-      examples   = [
+      examples = [
         "When will the next big earthquake hit Vancouver?",
         "Predict where the next M7.0 will strike",
         "Can you forecast earthquakes for next month?",
@@ -28,7 +28,7 @@ resource "aws_bedrock_guardrail" "earthquake_safety" {
     topics_config {
       name       = "Earthquake Conspiracy Theories"
       definition = "Conspiracy theories about earthquake causes, such as government weather control, secret weapons, or unscientific claims about earthquake generation."
-      examples   = [
+      examples = [
         "Are earthquakes caused by HAARP?",
         "Is the government creating earthquakes?",
         "Tell me about earthquake weapons"
@@ -133,30 +133,30 @@ resource "aws_iam_role_policy" "agent" {
 # ========================================
 
 resource "aws_lambda_permission" "allow_bedrock_get_recent_earthquakes" {
-  statement_id  = "AllowBedrockInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = var.get_recent_earthquakes_lambda_arn
-  principal     = "bedrock.amazonaws.com"
+  statement_id   = "AllowBedrockInvoke"
+  action         = "lambda:InvokeFunction"
+  function_name  = var.get_recent_earthquakes_lambda_arn
+  principal      = "bedrock.amazonaws.com"
   source_account = data.aws_caller_identity.current.account_id
-  source_arn    = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/*"
+  source_arn     = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/*"
 }
 
 resource "aws_lambda_permission" "allow_bedrock_analyze_historical_patterns" {
-  statement_id  = "AllowBedrockInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = var.analyze_historical_patterns_lambda_arn
-  principal     = "bedrock.amazonaws.com"
+  statement_id   = "AllowBedrockInvoke"
+  action         = "lambda:InvokeFunction"
+  function_name  = var.analyze_historical_patterns_lambda_arn
+  principal      = "bedrock.amazonaws.com"
   source_account = data.aws_caller_identity.current.account_id
-  source_arn    = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/*"
+  source_arn     = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/*"
 }
 
 resource "aws_lambda_permission" "allow_bedrock_get_hazard_assessment" {
-  statement_id  = "AllowBedrockInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = var.get_hazard_assessment_lambda_arn
-  principal     = "bedrock.amazonaws.com"
+  statement_id   = "AllowBedrockInvoke"
+  action         = "lambda:InvokeFunction"
+  function_name  = var.get_hazard_assessment_lambda_arn
+  principal      = "bedrock.amazonaws.com"
   source_account = data.aws_caller_identity.current.account_id
-  source_arn    = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/*"
+  source_arn     = "arn:aws:bedrock:${var.aws_region}:${data.aws_caller_identity.current.account_id}:agent/*"
 }
 
 resource "aws_lambda_permission" "allow_bedrock_get_location_context" {
@@ -182,10 +182,10 @@ resource "aws_lambda_permission" "allow_bedrock_fetch_weather_at_epicenter" {
 # ========================================
 
 resource "aws_bedrockagent_agent" "main" {
-  agent_name              = "${var.project_name}-${var.environment}-agent"
-  agent_resource_role_arn = aws_iam_role.agent.arn
-  foundation_model        = "us.anthropic.claude-sonnet-4-20250514-v1:0"
-  description             = "AI assistant for earthquake monitoring and seismic data analysis"
+  agent_name                  = "${var.project_name}-${var.environment}-agent"
+  agent_resource_role_arn     = aws_iam_role.agent.arn
+  foundation_model            = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+  description                 = "AI assistant for earthquake monitoring and seismic data analysis"
   idle_session_ttl_in_seconds = 1800
 
   instruction = <<-EOT
@@ -229,11 +229,11 @@ EOT
 # ========================================
 
 resource "aws_bedrockagent_agent_action_group" "recent_data" {
-  agent_id      = aws_bedrockagent_agent.main.agent_id
-  agent_version = "DRAFT"
+  agent_id          = aws_bedrockagent_agent.main.agent_id
+  agent_version     = "DRAFT"
   action_group_name = "RecentDataQueries"
   description       = "Query recent earthquake events from the last 30 days"
-  
+
   action_group_executor {
     lambda = var.get_recent_earthquakes_lambda_arn
   }
@@ -243,7 +243,7 @@ resource "aws_bedrockagent_agent_action_group" "recent_data" {
       functions {
         name        = "get_recent_earthquakes"
         description = "Retrieve recent earthquake events from DynamoDB (last 30 days). Use this when users ask about current seismic activity, recent earthquakes, or what happened recently."
-        
+
         parameters {
           map_block_key = "min_magnitude"
           type          = "number"
@@ -281,11 +281,11 @@ resource "aws_bedrockagent_agent_action_group" "recent_data" {
 # ========================================
 
 resource "aws_bedrockagent_agent_action_group" "historical_analytics" {
-  agent_id      = aws_bedrockagent_agent.main.agent_id
-  agent_version = "DRAFT"
+  agent_id          = aws_bedrockagent_agent.main.agent_id
+  agent_version     = "DRAFT"
   action_group_name = "HistoricalAnalytics"
   description       = "Analyze long-term seismic trends and patterns using Athena"
-  
+
   action_group_executor {
     lambda = var.analyze_historical_patterns_lambda_arn
   }
@@ -295,7 +295,7 @@ resource "aws_bedrockagent_agent_action_group" "historical_analytics" {
       functions {
         name        = "analyze_historical_patterns"
         description = "Run Athena queries on historical earthquake data for trend analysis. Use this when users ask about historical patterns, long-term trends, averages, or multi-year comparisons."
-        
+
         parameters {
           map_block_key = "query_type"
           type          = "string"
@@ -333,11 +333,11 @@ resource "aws_bedrockagent_agent_action_group" "historical_analytics" {
 # ========================================
 
 resource "aws_bedrockagent_agent_action_group" "knowledge_base" {
-  agent_id      = aws_bedrockagent_agent.main.agent_id
-  agent_version = "DRAFT"
+  agent_id          = aws_bedrockagent_agent.main.agent_id
+  agent_version     = "DRAFT"
   action_group_name = "KnowledgeBaseRetrieval"
   description       = "Retrieve context from seismic hazard reports and bulletins"
-  
+
   action_group_executor {
     lambda = var.get_hazard_assessment_lambda_arn
   }
@@ -347,7 +347,7 @@ resource "aws_bedrockagent_agent_action_group" "knowledge_base" {
       functions {
         name        = "get_hazard_assessment"
         description = "Search the knowledge base for information from earthquake reports, hazard assessments, and research documents. Use this when users ask about seismic hazard, risk assessments, historical narratives, or specific locations mentioned in reports."
-        
+
         parameters {
           map_block_key = "query"
           type          = "string"

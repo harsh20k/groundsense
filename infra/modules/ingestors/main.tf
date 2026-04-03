@@ -56,6 +56,11 @@ resource "aws_iam_role_policy" "seismic_poller" {
   })
 }
 
+resource "aws_iam_role_policy_attachment" "seismic_poller_vpc" {
+  role       = aws_iam_role.seismic_poller.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 # Seismic poller Lambda function
 data "archive_file" "seismic_poller" {
   type        = "zip"
@@ -70,7 +75,7 @@ resource "aws_lambda_function" "seismic_poller" {
   handler          = "handler.lambda_handler"
   source_code_hash = data.archive_file.seismic_poller.output_base64sha256
   runtime          = "python3.11"
-  timeout          = 60
+  timeout          = 90
 
   environment {
     variables = {
@@ -78,6 +83,11 @@ resource "aws_lambda_function" "seismic_poller" {
       S3_BUCKET_NAME      = var.seismic_archive_bucket_name
       TTL_DAYS            = var.dynamodb_ttl_days
     }
+  }
+
+  vpc_config {
+    subnet_ids         = [var.private_subnet_id]
+    security_group_ids = [var.lambda_security_group_id]
   }
 
   tags = {
@@ -144,6 +154,11 @@ resource "aws_iam_role_policy" "document_fetcher" {
   })
 }
 
+resource "aws_iam_role_policy_attachment" "document_fetcher_vpc" {
+  role       = aws_iam_role.document_fetcher.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 # Document fetcher Lambda function
 data "archive_file" "document_fetcher" {
   type        = "zip"
@@ -158,12 +173,17 @@ resource "aws_lambda_function" "document_fetcher" {
   handler          = "handler.lambda_handler"
   source_code_hash = data.archive_file.document_fetcher.output_base64sha256
   runtime          = "python3.11"
-  timeout          = 300
+  timeout          = 330
 
   environment {
     variables = {
       S3_BUCKET_NAME = var.documents_bucket_name
     }
+  }
+
+  vpc_config {
+    subnet_ids         = [var.private_subnet_id]
+    security_group_ids = [var.lambda_security_group_id]
   }
 
   tags = {

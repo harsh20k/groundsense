@@ -14,8 +14,8 @@ resource "aws_s3vectors_vector_bucket" "embeddings" {
 resource "aws_s3vectors_index" "documents" {
   vector_bucket_name = aws_s3vectors_vector_bucket.embeddings.vector_bucket_name
   index_name         = "groundsense-docs"
-  
-  dimension       = 1024  # Amazon Titan Embeddings V2 dimension
+
+  dimension       = 1024 # Amazon Titan Embeddings V2 dimension
   distance_metric = "cosine"
   data_type       = "float32"
 
@@ -102,8 +102,8 @@ data "aws_caller_identity" "current" {}
 
 # Bedrock Knowledge Base
 resource "aws_bedrockagent_knowledge_base" "main" {
-  name     = "${var.project_name}-${var.environment}-kb"
-  role_arn = aws_iam_role.bedrock_kb.arn
+  name        = "${var.project_name}-${var.environment}-kb"
+  role_arn    = aws_iam_role.bedrock_kb.arn
   description = "Knowledge base for earthquake documents and reports"
 
   knowledge_base_configuration {

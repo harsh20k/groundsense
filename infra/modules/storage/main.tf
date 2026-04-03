@@ -1,8 +1,8 @@
 # DynamoDB table for recent earthquake data (30-day TTL)
 resource "aws_dynamodb_table" "earthquakes" {
-  name           = "${var.project_name}-${var.environment}-earthquakes"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "earthquake_id"
+  name         = "${var.project_name}-${var.environment}-earthquakes"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "earthquake_id"
 
   attribute {
     name = "earthquake_id"

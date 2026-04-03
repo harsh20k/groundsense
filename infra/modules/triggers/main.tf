@@ -75,6 +75,11 @@ resource "aws_iam_role_policy" "alert" {
   })
 }
 
+resource "aws_iam_role_policy_attachment" "alert_vpc" {
+  role       = aws_iam_role.alert.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 # Alert Lambda function
 data "archive_file" "alert" {
   type        = "zip"
@@ -89,12 +94,17 @@ resource "aws_lambda_function" "alert" {
   handler          = "handler.lambda_handler"
   source_code_hash = data.archive_file.alert.output_base64sha256
   runtime          = "python3.11"
-  timeout          = 30
+  timeout          = 60
 
   environment {
     variables = {
       SNS_TOPIC_ARN = aws_sns_topic.alerts.arn
     }
+  }
+
+  vpc_config {
+    subnet_ids         = [var.private_subnet_id]
+    security_group_ids = [var.lambda_security_group_id]
   }
 
   tags = {
@@ -178,6 +188,11 @@ resource "aws_iam_role_policy" "kb_sync" {
   })
 }
 
+resource "aws_iam_role_policy_attachment" "kb_sync_vpc" {
+  role       = aws_iam_role.kb_sync.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 # KB sync Lambda function
 data "archive_file" "kb_sync" {
   type        = "zip"
@@ -192,13 +207,18 @@ resource "aws_lambda_function" "kb_sync" {
   handler          = "handler.lambda_handler"
   source_code_hash = data.archive_file.kb_sync.output_base64sha256
   runtime          = "python3.11"
-  timeout          = 30
+  timeout          = 60
 
   environment {
     variables = {
       KNOWLEDGE_BASE_ID = var.knowledge_base_id
       DATA_SOURCE_ID    = var.data_source_id
     }
+  }
+
+  vpc_config {
+    subnet_ids         = [var.private_subnet_id]
+    security_group_ids = [var.lambda_security_group_id]
   }
 
   tags = {

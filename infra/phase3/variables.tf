@@ -47,3 +47,13 @@ variable "knowledge_base_id" {
   description = "Bedrock Knowledge Base ID"
   type        = string
 }
+
+variable "private_subnet_id" {
+  description = "Private subnet ID for Lambda VPC configuration"
+  type        = string
+}
+
+variable "lambda_security_group_id" {
+  description = "Security group ID for Lambda functions"
+  type        = string
+}

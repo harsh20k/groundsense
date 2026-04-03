@@ -22,7 +22,7 @@ resource "aws_lambda_function" "response_formatter" {
   handler          = "handler.lambda_handler"
   source_code_hash = data.archive_file.response_formatter.output_base64sha256
   runtime          = "python3.11"
-  timeout          = 120
+  timeout          = 180
   memory_size      = 512
 
   environment {
@@ -32,6 +32,11 @@ resource "aws_lambda_function" "response_formatter" {
       METRICS_NAMESPACE = var.metrics_namespace
       ENVIRONMENT       = var.environment
     }
+  }
+
+  vpc_config {
+    subnet_ids         = [var.private_subnet_id]
+    security_group_ids = [var.lambda_security_group_id]
   }
 
   tags = {
@@ -129,4 +134,10 @@ resource "aws_iam_role_policy" "response_formatter_cloudwatch_metrics" {
       }
     ]
   })
+}
+
+# VPC execution permissions
+resource "aws_iam_role_policy_attachment" "response_formatter_vpc" {
+  role       = aws_iam_role.response_formatter.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }

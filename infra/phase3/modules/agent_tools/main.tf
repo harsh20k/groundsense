@@ -63,21 +63,31 @@ resource "aws_iam_role_policy" "get_recent_earthquakes" {
   })
 }
 
+resource "aws_iam_role_policy_attachment" "get_recent_earthquakes_vpc" {
+  role       = aws_iam_role.get_recent_earthquakes.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 # Lambda Function
 resource "aws_lambda_function" "get_recent_earthquakes" {
   filename         = data.archive_file.get_recent_earthquakes.output_path
   function_name    = "${var.project_name}-${var.environment}-get-recent-earthquakes"
-  role            = aws_iam_role.get_recent_earthquakes.arn
-  handler         = "handler.lambda_handler"
+  role             = aws_iam_role.get_recent_earthquakes.arn
+  handler          = "handler.lambda_handler"
   source_code_hash = data.archive_file.get_recent_earthquakes.output_base64sha256
-  runtime         = "python3.12"
-  timeout         = 30
-  memory_size     = 256
+  runtime          = "python3.12"
+  timeout          = 60
+  memory_size      = 256
 
   environment {
     variables = {
       DYNAMODB_TABLE_NAME = var.dynamodb_table_name
     }
+  }
+
+  vpc_config {
+    subnet_ids         = [var.private_subnet_id]
+    security_group_ids = [var.lambda_security_group_id]
   }
 
   tags = {
@@ -193,23 +203,33 @@ resource "aws_iam_role_policy" "analyze_historical_patterns" {
   })
 }
 
+resource "aws_iam_role_policy_attachment" "analyze_historical_patterns_vpc" {
+  role       = aws_iam_role.analyze_historical_patterns.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 # Lambda Function
 resource "aws_lambda_function" "analyze_historical_patterns" {
   filename         = data.archive_file.analyze_historical_patterns.output_path
   function_name    = "${var.project_name}-${var.environment}-analyze-patterns"
-  role            = aws_iam_role.analyze_historical_patterns.arn
-  handler         = "handler.lambda_handler"
+  role             = aws_iam_role.analyze_historical_patterns.arn
+  handler          = "handler.lambda_handler"
   source_code_hash = data.archive_file.analyze_historical_patterns.output_base64sha256
-  runtime         = "python3.12"
-  timeout         = 30
-  memory_size     = 256
+  runtime          = "python3.12"
+  timeout          = 60
+  memory_size      = 256
 
   environment {
     variables = {
-      ATHENA_WORKGROUP_NAME     = var.athena_workgroup_name
-      GLUE_DATABASE_NAME        = var.glue_database_name
-      S3_ATHENA_OUTPUT_BUCKET   = var.s3_athena_output_bucket
+      ATHENA_WORKGROUP_NAME   = var.athena_workgroup_name
+      GLUE_DATABASE_NAME      = var.glue_database_name
+      S3_ATHENA_OUTPUT_BUCKET = var.s3_athena_output_bucket
     }
+  }
+
+  vpc_config {
+    subnet_ids         = [var.private_subnet_id]
+    security_group_ids = [var.lambda_security_group_id]
   }
 
   tags = {
@@ -280,21 +300,31 @@ resource "aws_iam_role_policy" "get_hazard_assessment" {
   })
 }
 
+resource "aws_iam_role_policy_attachment" "get_hazard_assessment_vpc" {
+  role       = aws_iam_role.get_hazard_assessment.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 # Lambda Function
 resource "aws_lambda_function" "get_hazard_assessment" {
   filename         = data.archive_file.get_hazard_assessment.output_path
   function_name    = "${var.project_name}-${var.environment}-get-hazard"
-  role            = aws_iam_role.get_hazard_assessment.arn
-  handler         = "handler.lambda_handler"
+  role             = aws_iam_role.get_hazard_assessment.arn
+  handler          = "handler.lambda_handler"
   source_code_hash = data.archive_file.get_hazard_assessment.output_base64sha256
-  runtime         = "python3.12"
-  timeout         = 30
-  memory_size     = 256
+  runtime          = "python3.12"
+  timeout          = 60
+  memory_size      = 256
 
   environment {
     variables = {
       KNOWLEDGE_BASE_ID = var.knowledge_base_id
     }
+  }
+
+  vpc_config {
+    subnet_ids         = [var.private_subnet_id]
+    security_group_ids = [var.lambda_security_group_id]
   }
 
   tags = {
@@ -362,6 +392,11 @@ resource "aws_iam_role_policy" "get_location_context" {
   })
 }
 
+resource "aws_iam_role_policy_attachment" "get_location_context_vpc" {
+  role       = aws_iam_role.get_location_context.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 resource "aws_lambda_function" "get_location_context" {
   filename         = data.archive_file.get_location_context.output_path
   function_name    = "${var.project_name}-${var.environment}-get-location-ctx"
@@ -369,13 +404,18 @@ resource "aws_lambda_function" "get_location_context" {
   handler          = "handler.lambda_handler"
   source_code_hash = data.archive_file.get_location_context.output_base64sha256
   runtime          = "python3.12"
-  timeout          = 30
+  timeout          = 60
   memory_size      = 256
 
   environment {
     variables = {
       KNOWLEDGE_BASE_ID = var.knowledge_base_id
     }
+  }
+
+  vpc_config {
+    subnet_ids         = [var.private_subnet_id]
+    security_group_ids = [var.lambda_security_group_id]
   }
 
   tags = {
@@ -435,6 +475,11 @@ resource "aws_iam_role_policy" "fetch_weather_at_epicenter" {
   })
 }
 
+resource "aws_iam_role_policy_attachment" "fetch_weather_at_epicenter_vpc" {
+  role       = aws_iam_role.fetch_weather_at_epicenter.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 resource "aws_lambda_function" "fetch_weather_at_epicenter" {
   filename         = data.archive_file.fetch_weather_at_epicenter.output_path
   function_name    = "${var.project_name}-${var.environment}-fetch-weather"
@@ -442,8 +487,13 @@ resource "aws_lambda_function" "fetch_weather_at_epicenter" {
   handler          = "handler.lambda_handler"
   source_code_hash = data.archive_file.fetch_weather_at_epicenter.output_base64sha256
   runtime          = "python3.12"
-  timeout          = 30
+  timeout          = 60
   memory_size      = 256
+
+  vpc_config {
+    subnet_ids         = [var.private_subnet_id]
+    security_group_ids = [var.lambda_security_group_id]
+  }
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-fetch-weather"

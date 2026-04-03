@@ -37,3 +37,13 @@ variable "metrics_namespace" {
   type        = string
   default     = "GroundSense"
 }
+
+variable "private_subnet_id" {
+  description = "Private subnet ID for Lambda VPC configuration"
+  type        = string
+}
+
+variable "lambda_security_group_id" {
+  description = "Security group ID for Lambda functions"
+  type        = string
+}
