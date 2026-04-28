@@ -184,7 +184,7 @@ resource "aws_lambda_permission" "allow_bedrock_fetch_weather_at_epicenter" {
 resource "aws_bedrockagent_agent" "main" {
   agent_name                  = "${var.project_name}-${var.environment}-agent"
   agent_resource_role_arn     = aws_iam_role.agent.arn
-  foundation_model            = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+  foundation_model            = var.bedrock_model_id
   description                 = "AI assistant for earthquake monitoring and seismic data analysis"
   idle_session_ttl_in_seconds = 1800
 

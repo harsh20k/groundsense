@@ -26,4 +26,5 @@ module "bedrock_agent" {
   get_location_context_lambda_arn        = module.agent_tools.get_location_context_function_arn
   fetch_weather_at_epicenter_lambda_arn  = module.agent_tools.fetch_weather_at_epicenter_function_arn
   knowledge_base_id                      = var.knowledge_base_id
+  bedrock_model_id                       = var.bedrock_model_id
 }

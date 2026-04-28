@@ -57,3 +57,9 @@ variable "lambda_security_group_id" {
   description = "Security group ID for Lambda functions"
   type        = string
 }
+
+variable "bedrock_model_id" {
+  description = "Bedrock foundation model or inference profile ID — swap without code changes. See notes/LLM-model-options.md for supported models."
+  type        = string
+  default     = "us.amazon.nova-pro-v1:0"
+}

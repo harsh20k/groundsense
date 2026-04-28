@@ -42,3 +42,9 @@ variable "knowledge_base_id" {
   description = "Bedrock Knowledge Base ID"
   type        = string
 }
+
+variable "bedrock_model_id" {
+  description = "Bedrock foundation model or inference profile ID. Swap without code changes. Claude 3.5+ needs us.* inference profile; Gemma is NOT supported (no tool-calling)."
+  type        = string
+  default     = "us.amazon.nova-pro-v1:0"
+}
